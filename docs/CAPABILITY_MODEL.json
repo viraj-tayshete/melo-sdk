@@ -1,0 +1,295 @@
+{
+  "meloCapabilityModel": {
+    "version": "1.0",
+    "sdkVersion": "0.1.0",
+    "protocolVersion": 1,
+    "description": "Melo shared hardware capability model. This file is the single source of truth for all Melo hardware capabilities. Both the Arduino SDK and Melo Blocks/Web must implement capabilities defined here and ONLY capabilities defined here.",
+    "capabilities": [
+      {
+        "id": "MOVE_FORWARD",
+        "category": "motion",
+        "description": "Drive the robot forward at a specified speed",
+        "arduinoApi": "Melo.moveForward(speed)",
+        "blockLabel": "Move Forward",
+        "inputs": [
+          {
+            "name": "speed",
+            "type": "uint8",
+            "unit": "percent",
+            "min": 0,
+            "max": 100,
+            "default": 70,
+            "description": "Motor speed as percentage of maximum"
+          }
+        ],
+        "outputs": [],
+        "sideEffects": ["Left motor forward at speed", "Right motor forward at speed"],
+        "errors": ["MELO_ERR_NOT_INIT", "MELO_ERR_MOTOR"],
+        "protocolCommand": "CMD_MOTOR_MOVE_FORWARD"
+      },
+      {
+        "id": "MOVE_BACKWARD",
+        "category": "motion",
+        "description": "Drive the robot backward at a specified speed",
+        "arduinoApi": "Melo.moveBackward(speed)",
+        "blockLabel": "Move Backward",
+        "inputs": [
+          {
+            "name": "speed",
+            "type": "uint8",
+            "unit": "percent",
+            "min": 0,
+            "max": 100,
+            "default": 70,
+            "description": "Motor speed as percentage of maximum"
+          }
+        ],
+        "outputs": [],
+        "sideEffects": ["Left motor backward at speed", "Right motor backward at speed"],
+        "errors": ["MELO_ERR_NOT_INIT", "MELO_ERR_MOTOR"],
+        "protocolCommand": "CMD_MOTOR_MOVE_BACKWARD"
+      },
+      {
+        "id": "TURN_LEFT",
+        "category": "motion",
+        "description": "Turn the robot left (counter-clockwise) using differential drive",
+        "arduinoApi": "Melo.turnLeft(speed)",
+        "blockLabel": "Turn Left",
+        "inputs": [
+          {
+            "name": "speed",
+            "type": "uint8",
+            "unit": "percent",
+            "min": 0,
+            "max": 100,
+            "default": 60,
+            "description": "Turn speed as percentage of maximum"
+          }
+        ],
+        "outputs": [],
+        "sideEffects": ["Right motor forward", "Left motor backward"],
+        "errors": ["MELO_ERR_NOT_INIT", "MELO_ERR_MOTOR"],
+        "protocolCommand": "CMD_MOTOR_TURN_LEFT"
+      },
+      {
+        "id": "TURN_RIGHT",
+        "category": "motion",
+        "description": "Turn the robot right (clockwise) using differential drive",
+        "arduinoApi": "Melo.turnRight(speed)",
+        "blockLabel": "Turn Right",
+        "inputs": [
+          {
+            "name": "speed",
+            "type": "uint8",
+            "unit": "percent",
+            "min": 0,
+            "max": 100,
+            "default": 60,
+            "description": "Turn speed as percentage of maximum"
+          }
+        ],
+        "outputs": [],
+        "sideEffects": ["Left motor forward", "Right motor backward"],
+        "errors": ["MELO_ERR_NOT_INIT", "MELO_ERR_MOTOR"],
+        "protocolCommand": "CMD_MOTOR_TURN_RIGHT"
+      },
+      {
+        "id": "STOP",
+        "category": "motion",
+        "description": "Stop all motors (active brake)",
+        "arduinoApi": "Melo.stop()",
+        "blockLabel": "Stop",
+        "inputs": [],
+        "outputs": [],
+        "sideEffects": ["All motors stopped (actively braked)"],
+        "errors": ["MELO_ERR_NOT_INIT"],
+        "protocolCommand": "CMD_MOTOR_STOP"
+      },
+      {
+        "id": "SET_MOTOR",
+        "category": "motion",
+        "description": "Set individual motor speed and direction",
+        "arduinoApi": "Melo.motor(motorId, speed)",
+        "blockLabel": "Set Motor",
+        "inputs": [
+          {
+            "name": "motorId",
+            "type": "enum",
+            "values": ["LEFT", "RIGHT", "BOTH"],
+            "description": "Which motor to control"
+          },
+          {
+            "name": "speed",
+            "type": "int8",
+            "unit": "percent",
+            "min": -100,
+            "max": 100,
+            "description": "Speed: positive=forward, negative=backward, 0=brake"
+          }
+        ],
+        "outputs": [],
+        "sideEffects": ["Specified motor set to given speed and direction"],
+        "errors": ["MELO_ERR_NOT_INIT", "MELO_ERR_INVALID_ARG", "MELO_ERR_MOTOR"],
+        "protocolCommand": "CMD_MOTOR_SET_SPEED"
+      },
+      {
+        "id": "SET_SERVO",
+        "category": "servo",
+        "description": "Set servo to a target angle",
+        "arduinoApi": "Melo.servo(servoId, angle)",
+        "blockLabel": "Set Servo",
+        "inputs": [
+          {
+            "name": "servoId",
+            "type": "uint8",
+            "min": 1,
+            "max": 1,
+            "description": "Servo number (1-based). Only servo 1 supported in v0.1.0."
+          },
+          {
+            "name": "angle",
+            "type": "uint8",
+            "unit": "degrees",
+            "min": 0,
+            "max": 180,
+            "description": "Target angle in degrees. Clamped to safe limits."
+          }
+        ],
+        "outputs": [],
+        "sideEffects": ["Servo moves to target angle"],
+        "errors": ["MELO_ERR_NOT_INIT", "MELO_ERR_INVALID_ARG"],
+        "protocolCommand": "CMD_SERVO_SET_ANGLE"
+      },
+      {
+        "id": "READ_DISTANCE",
+        "category": "sensor",
+        "description": "Read ultrasonic distance sensor",
+        "arduinoApi": "Melo.readDistance()",
+        "blockLabel": "Read Distance",
+        "inputs": [],
+        "outputs": [
+          {
+            "name": "distance",
+            "type": "float",
+            "unit": "cm",
+            "min": 2.0,
+            "max": 400.0,
+            "errorValue": -1.0,
+            "description": "Distance to nearest object in cm. -1.0 if out of range or error."
+          }
+        ],
+        "sideEffects": ["Blocking: ~30ms per call"],
+        "errors": ["MELO_ERR_NOT_INIT", "MELO_ERR_SENSOR"],
+        "protocolCommand": "CMD_SENSOR_READ_DISTANCE",
+        "notes": "Minimum recommended interval: 50ms between calls"
+      },
+      {
+        "id": "READ_LINE",
+        "category": "sensor",
+        "description": "Read line sensor (IR reflective)",
+        "arduinoApi": "Melo.readLine()",
+        "blockLabel": "Line Detected?",
+        "inputs": [],
+        "outputs": [
+          {
+            "name": "onLine",
+            "type": "bool",
+            "description": "true if dark surface (line) detected, false otherwise"
+          }
+        ],
+        "sideEffects": [],
+        "errors": ["MELO_ERR_NOT_INIT", "MELO_ERR_SENSOR"],
+        "protocolCommand": "CMD_SENSOR_READ_LINE"
+      },
+      {
+        "id": "READ_LIGHT",
+        "category": "sensor",
+        "description": "Read ambient light level",
+        "arduinoApi": "Melo.readLight()",
+        "blockLabel": "Read Light Level",
+        "inputs": [],
+        "outputs": [
+          {
+            "name": "lightLevel",
+            "type": "uint16",
+            "unit": "adc_raw",
+            "min": 0,
+            "max": 4095,
+            "description": "Raw ADC reading. Higher = more light."
+          }
+        ],
+        "sideEffects": [],
+        "errors": ["MELO_ERR_NOT_INIT"],
+        "protocolCommand": "CMD_SENSOR_READ_LIGHT"
+      },
+      {
+        "id": "SET_LED",
+        "category": "output",
+        "description": "Set LED on or off",
+        "arduinoApi": "Melo.led(ledId, on)",
+        "blockLabel": "Set LED",
+        "inputs": [
+          {
+            "name": "ledId",
+            "type": "uint8",
+            "min": 1,
+            "max": 1,
+            "description": "LED number (1-based). Only LED 1 supported in v0.1.0."
+          },
+          {
+            "name": "on",
+            "type": "bool",
+            "description": "true = LED on, false = LED off"
+          }
+        ],
+        "outputs": [],
+        "sideEffects": ["LED state changes"],
+        "errors": ["MELO_ERR_NOT_INIT", "MELO_ERR_INVALID_ARG"],
+        "protocolCommand": "CMD_LED_SET"
+      },
+      {
+        "id": "BEEP",
+        "category": "output",
+        "description": "Play a tone on the buzzer for a specified duration",
+        "arduinoApi": "Melo.beep(frequencyHz, durationMs)",
+        "blockLabel": "Beep",
+        "inputs": [
+          {
+            "name": "frequencyHz",
+            "type": "uint16",
+            "unit": "Hz",
+            "min": 0,
+            "max": 20000,
+            "description": "Tone frequency in Hz. 0 = silence."
+          },
+          {
+            "name": "durationMs",
+            "type": "uint32",
+            "unit": "ms",
+            "min": 0,
+            "max": 60000,
+            "description": "Tone duration in milliseconds"
+          }
+        ],
+        "outputs": [],
+        "sideEffects": ["Blocking: halts sketch for durationMs"],
+        "errors": ["MELO_ERR_NOT_INIT"],
+        "protocolCommand": "CMD_BUZZER_BEEP"
+      }
+    ],
+    "errorCodes": [
+      { "id": "MELO_OK",                  "value": 0,  "message": "OK — Melo is ready" },
+      { "id": "MELO_ERR_NOT_INIT",        "value": 1,  "message": "Melo.begin() has not been called" },
+      { "id": "MELO_ERR_DEVICE_NOT_FOUND","value": 2,  "message": "Melo board not detected. Check USB connection." },
+      { "id": "MELO_ERR_TIMEOUT",         "value": 3,  "message": "Operation timed out. Check hardware connections." },
+      { "id": "MELO_ERR_FIRMWARE_MISMATCH","value": 4, "message": "Firmware version incompatible. Please update firmware." },
+      { "id": "MELO_ERR_PROTOCOL_MISMATCH","value": 5, "message": "Protocol version mismatch. Update SDK or firmware." },
+      { "id": "MELO_ERR_INVALID_ARG",     "value": 6,  "message": "Invalid argument. Check parameter ranges." },
+      { "id": "MELO_ERR_INVALID_CMD",     "value": 7,  "message": "Invalid command." },
+      { "id": "MELO_ERR_SENSOR",          "value": 8,  "message": "Sensor read failed. Check sensor connections." },
+      { "id": "MELO_ERR_CALIBRATION",     "value": 9,  "message": "Calibration failed." },
+      { "id": "MELO_ERR_MOTOR",           "value": 10, "message": "Motor error. Check motor and driver connections." },
+      { "id": "MELO_ERR_TRANSPORT",       "value": 11, "message": "Communication transport failure." }
+    ]
+  }
+}

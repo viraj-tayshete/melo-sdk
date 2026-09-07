@@ -1,0 +1,72 @@
+#######################################
+# Melo Arduino Library — keywords.txt
+# Syntax coloring for Arduino IDE
+#######################################
+
+#######################################
+# Datatypes (KEYWORD1)
+#######################################
+Melo	KEYWORD1
+MeloClass	KEYWORD1
+MeloStatus	KEYWORD1
+MeloMotor	KEYWORD1
+MeloDirection	KEYWORD1
+MeloTurnDir	KEYWORD1
+MeloDeviceInfo	KEYWORD1
+MeloDistanceReading	KEYWORD1
+MeloLineSensorReading	KEYWORD1
+
+#######################################
+# Methods / Functions (KEYWORD2)
+#######################################
+begin	KEYWORD2
+isReady	KEYWORD2
+getSdkVersion	KEYWORD2
+getFirmwareVersion	KEYWORD2
+getDeviceInfo	KEYWORD2
+lastError	KEYWORD2
+lastErrorMessage	KEYWORD2
+statusMessage	KEYWORD2
+printStatus	KEYWORD2
+moveForward	KEYWORD2
+moveBackward	KEYWORD2
+turnLeft	KEYWORD2
+turnRight	KEYWORD2
+stop	KEYWORD2
+coast	KEYWORD2
+motor	KEYWORD2
+servo	KEYWORD2
+servoCenter	KEYWORD2
+readDistance	KEYWORD2
+readDistanceFull	KEYWORD2
+obstacleDetected	KEYWORD2
+readLine	KEYWORD2
+readLineFull	KEYWORD2
+readLight	KEYWORD2
+led	KEYWORD2
+ledBlink	KEYWORD2
+beep	KEYWORD2
+startBeep	KEYWORD2
+stopBeep	KEYWORD2
+
+#######################################
+# Constants (LITERAL1)
+#######################################
+MELO_OK	LITERAL1
+MELO_ERR_NOT_INIT	LITERAL1
+MELO_ERR_DEVICE_NOT_FOUND	LITERAL1
+MELO_ERR_TIMEOUT	LITERAL1
+MELO_ERR_FIRMWARE_MISMATCH	LITERAL1
+MELO_ERR_PROTOCOL_MISMATCH	LITERAL1
+MELO_ERR_INVALID_ARG	LITERAL1
+MELO_ERR_INVALID_CMD	LITERAL1
+MELO_ERR_SENSOR	LITERAL1
+MELO_ERR_CALIBRATION	LITERAL1
+MELO_ERR_MOTOR	LITERAL1
+MELO_ERR_TRANSPORT	LITERAL1
+MOTOR_LEFT	LITERAL1
+MOTOR_RIGHT	LITERAL1
+MOTOR_BOTH	LITERAL1
+DIR_FORWARD	LITERAL1
+DIR_BACKWARD	LITERAL1
+DIR_STOP	LITERAL1
