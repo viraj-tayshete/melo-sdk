@@ -52,7 +52,7 @@ No `analogWrite()`. No `ledcSetup()`. No pulse timing. Just `Melo.moveForward(70
 ### Option C — Developer install
 
 ```bash
-git clone https://github.com/virajherath/MeloSDK.git
+git clone https://github.com/viraj-tayshete/melo-sdk.git
 ```
 Move the `MeloSDK` folder into your Arduino `libraries/` directory.
 
