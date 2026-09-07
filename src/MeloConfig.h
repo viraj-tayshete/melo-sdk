@@ -61,6 +61,7 @@
 // ASSUMPTION: Standard 50Hz PWM servo
 // ---------------------------------------------------------------------------
 #define SERVO_1_PIN          13   // PLACEHOLDER
+#define SERVO_1_PWM_CH       3    // ESP32 LEDC channel for servo 1
 #define SERVO_1_MIN_PULSE    500  // microseconds (0 degrees)
 #define SERVO_1_MAX_PULSE    2400 // microseconds (180 degrees)
 #define SERVO_COUNT          1    // PLACEHOLDER -- verify on PCB

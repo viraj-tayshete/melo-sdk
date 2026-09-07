@@ -25,7 +25,12 @@
 #ifndef MELO_PROTOCOL_H
 #define MELO_PROTOCOL_H
 
-#include <Arduino.h>
+#ifdef ARDUINO
+  #include <Arduino.h>
+#else
+  #include <cstdint>
+  #include <cstddef>
+#endif
 
 // ---------------------------------------------------------------------------
 // Protocol Version

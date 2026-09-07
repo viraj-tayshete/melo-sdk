@@ -8,3 +8,4 @@ build/
 *.hex
 *.bin
 *.elf
+tests/runner

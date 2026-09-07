@@ -12,6 +12,9 @@
  */
 
 #include "Motor.h"
+#if defined(ESP32)
+  #include <esp_arduino_version.h>
+#endif
 
 // ---------------------------------------------------------------------------
 // Constructor
@@ -31,9 +34,12 @@ void MeloMotorDriver::begin() {
     pinMode(_dir2Pin, OUTPUT);
 
 #if defined(ESP32)
-    // ESP32: use LEDC hardware PWM
+  #if defined(ESP_ARDUINO_VERSION_MAJOR) && (ESP_ARDUINO_VERSION_MAJOR >= 3)
+    ledcAttachChannel(_pwmPin, MOTOR_PWM_FREQ, MOTOR_PWM_RESOLUTION, _pwmCh);
+  #else
     ledcSetup(_pwmCh, MOTOR_PWM_FREQ, MOTOR_PWM_RESOLUTION);
     ledcAttachPin(_pwmPin, _pwmCh);
+  #endif
 #else
     // ESP8266 / AVR: use analogWrite (software PWM)
     pinMode(_pwmPin, OUTPUT);
@@ -90,7 +96,11 @@ void MeloMotorDriver::coast() {
 
 void MeloMotorDriver::_applyPWM(uint8_t dutyCycle) {
 #if defined(ESP32)
+  #if defined(ESP_ARDUINO_VERSION_MAJOR) && (ESP_ARDUINO_VERSION_MAJOR >= 3)
+    ledcWriteChannel(_pwmCh, dutyCycle);
+  #else
     ledcWrite(_pwmCh, dutyCycle);
+  #endif
 #else
     analogWrite(_pwmPin, dutyCycle);
 #endif

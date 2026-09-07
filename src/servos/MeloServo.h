@@ -14,9 +14,14 @@
 #define MELO_SERVO_H
 
 #include <Arduino.h>
-#include <Servo.h>
 #include "../MeloConfig.h"
 #include "../MeloTypes.h"
+
+#if defined(ESP32)
+  #include <esp_arduino_version.h>
+#else
+  #include <Servo.h>
+#endif
 
 class MeloServoDriver {
 public:
@@ -24,8 +29,9 @@ public:
      * @param pin       GPIO pin connected to servo signal wire
      * @param minAngle  Minimum safe angle in degrees (default 0)
      * @param maxAngle  Maximum safe angle in degrees (default 180)
+     * @param pwmCh     LEDC channel on ESP32 (default SERVO_1_PWM_CH)
      */
-    MeloServoDriver(uint8_t pin, uint8_t minAngle = 0, uint8_t maxAngle = 180);
+    MeloServoDriver(uint8_t pin, uint8_t minAngle = 0, uint8_t maxAngle = 180, uint8_t pwmCh = SERVO_1_PWM_CH);
 
     /** Attach servo to pin. Must be called before use. */
     void begin();
@@ -60,7 +66,12 @@ private:
     uint8_t _minAngle;
     uint8_t _maxAngle;
     uint8_t _currentAngle;
+    uint8_t _pwmCh;
+    bool    _attached;
+
+#if !defined(ESP32)
     Servo   _servo;
+#endif
 };
 
 #endif // MELO_SERVO_H

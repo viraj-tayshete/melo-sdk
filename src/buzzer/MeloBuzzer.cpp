@@ -3,13 +3,16 @@
  *
  * Passive buzzer implementation.
  *
- * Uses tone()/noTone() on ESP8266 and AVR.
- * Uses LEDC hardware PWM on ESP32.
+ * Uses tone()/noTone() on ESP8266, AVR, and ESP32 Core 3.x.
+ * Uses LEDC hardware PWM on ESP32 Core 2.x.
  *
  * SDK Version: 0.1.0
  */
 
 #include "MeloBuzzer.h"
+#if defined(ESP32)
+  #include <esp_arduino_version.h>
+#endif
 
 MeloBuzzerDriver::MeloBuzzerDriver(uint8_t pin, uint8_t pwmCh)
     : _pin(pin), _pwmCh(pwmCh), _isPlaying(false)
@@ -21,11 +24,14 @@ void MeloBuzzerDriver::begin() {
     digitalWrite(_pin, LOW);
 
 #if defined(ESP32)
-    // Pre-configure LEDC channel at low resolution for tone generation
-    // Will be reconfigured per frequency on each beep
+  #if defined(ESP_ARDUINO_VERSION_MAJOR) && (ESP_ARDUINO_VERSION_MAJOR >= 3)
+    // ESP32 core 3.x has native tone() support backed by LEDC
+  #else
+    // Pre-configure LEDC channel at low resolution for tone generation on ESP32 core 2.x
     ledcSetup(_pwmCh, 1000, 8);
     ledcAttachPin(_pin, _pwmCh);
     ledcWrite(_pwmCh, 0);  // Silent
+  #endif
 #endif
 }
 
@@ -70,10 +76,14 @@ void MeloBuzzerDriver::playErrorTone() {
 
 void MeloBuzzerDriver::_startPWM(uint16_t frequencyHz) {
 #if defined(ESP32)
+  #if defined(ESP_ARDUINO_VERSION_MAJOR) && (ESP_ARDUINO_VERSION_MAJOR >= 3)
+    tone(_pin, frequencyHz);
+  #else
     // Reconfigure LEDC channel with new frequency
     ledcSetup(_pwmCh, frequencyHz, 8);
     ledcAttachPin(_pin, _pwmCh);
     ledcWrite(_pwmCh, 128);  // 50% duty cycle for passive buzzer
+  #endif
 #else
     // ESP8266 / AVR: use Arduino tone()
     tone(_pin, frequencyHz);
@@ -82,7 +92,12 @@ void MeloBuzzerDriver::_startPWM(uint16_t frequencyHz) {
 
 void MeloBuzzerDriver::_stopPWM() {
 #if defined(ESP32)
+  #if defined(ESP_ARDUINO_VERSION_MAJOR) && (ESP_ARDUINO_VERSION_MAJOR >= 3)
+    noTone(_pin);
+    digitalWrite(_pin, LOW);
+  #else
     ledcWrite(_pwmCh, 0);
+  #endif
 #else
     noTone(_pin);
     digitalWrite(_pin, LOW);

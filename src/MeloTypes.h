@@ -9,7 +9,14 @@
 #ifndef MELO_TYPES_H
 #define MELO_TYPES_H
 
-#include <Arduino.h>
+#ifdef ARDUINO
+  #include <Arduino.h>
+#else
+  #include <cstdint>
+  #include <cstddef>
+  #include <string>
+  typedef std::string String;
+#endif
 
 // ---------------------------------------------------------------------------
 // Motor / Direction Types
