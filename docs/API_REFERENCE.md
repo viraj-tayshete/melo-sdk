@@ -1,447 +1,113 @@
-# Melo SDK — API Reference
+# Melo SDK - API Reference
 
-**SDK Version:** 0.1.0  
-**Target:** ESP32 (also compatible with ESP8266)
+**SDK version:** 0.2.0  **Board:** Arduino Nano ESP32 (ESP32 core 3.x)
 
----
+Speeds are percentages of full wheel speed. Calling any function before `Melo.begin()` does nothing, prints a message to Serial and sets `lastError()` to `MELO_ERR_NOT_INIT`.
 
-## Quick Start
+## System
 
-```cpp
-#include <Melo.h>
+| Function | Description |
+|----------|-------------|
+| `MeloStatus begin()` | Set up the robot; call first in `setup()`. Plays a startup sound and blinks the LED. Returns `MELO_OK`, or `MELO_ERR_PIN` if a wheel pin could not be set up (and plays an error sound). Safe to call twice. |
+| `bool isReady()` | `true` after a successful `begin()`. |
+| `String getSdkVersion()` | e.g. `"0.2.0"`. |
+| `MeloDeviceInfo getDeviceInfo()` | `sdkVersion`, `hwVersion`, `board`. |
+| `MeloStatus lastError()` | Last error code. |
+| `String lastErrorMessage()` | Last error in plain language. |
+| `String statusMessage(MeloStatus)` | Plain-language text for any code. |
+| `void printStatus()` | Print version, board and last error to Serial. |
 
-void setup() {
-    Melo.begin();
-}
+## Driving
 
-void loop() {
-    Melo.moveForward(70);
-    delay(1000);
-    Melo.stop();
-    delay(1000);
-}
-```
+| Function | Range | Description |
+|----------|-------|-------------|
+| `moveForward(speed = 70)` | 0-100 | Both wheels forward until stopped. |
+| `moveBackward(speed = 70)` | 0-100 | Both wheels backward. |
+| `turnLeft(speed = 60)` | 0-100 | Spin left on the spot. **A speed, not an angle**: how far it turns depends on how long you wait. |
+| `turnRight(speed = 60)` | 0-100 | Spin right on the spot. |
+| `stop()` | | Stop both wheels. |
+| `wheel(side, speed)` | -100..100 | One wheel (`WHEEL_LEFT`, `WHEEL_RIGHT`) or `WHEEL_BOTH`. Negative = backward, 0 = stop. |
+| `trimWheel(side, trimUs)` | -200..200 | Add microseconds to the centre pulse, for a servo that creeps when stopped. Takes effect on the next drive command. |
 
----
+Values above the range are clamped. `stop()` removes the servo pulse entirely (`MELO_STOP_CUTS_PULSE`); if a servo drifts with no signal, set it to 0 to send the centre pulse instead.
 
-## System APIs
-
-### `Melo.begin()`
-
-Initialize the Melo robot. **Must be called first in `setup()` before any other Melo API.**
-
-```cpp
-MeloStatus status = Melo.begin();
-```
-
-| | |
-|---|---|
-| **Returns** | `MeloStatus` — `MELO_OK` on success, error code on failure |
-| **Side effects** | Initializes all hardware subsystems, plays startup tone, blinks LED |
-| **Errors** | `MELO_ERR_TRANSPORT`, `MELO_ERR_TIMEOUT` |
-
----
-
-### `Melo.isReady()`
+## Line following
 
 ```cpp
-bool ready = Melo.isReady();
+while (Melo.followLine(50)) { }
 ```
 
-Returns `true` if `Melo.begin()` was called successfully.
+| Function | Description |
+|----------|-------------|
+| `bool followLine(speed = 50)` | One short control step (about 5 ms); call it in a loop. Returns `false` when the line was lost and could not be found again: the wheels stop, an error sound plays and `lastError()` is `MELO_ERR_LINE_LOST`. A pause of over 0.5 s between calls starts a fresh run. |
+| `void resetLineFollow()` | Start from scratch. |
 
----
+Assumes a dark line on a light floor, with the sensor facing down **in front of** the wheels. With one on/off sensor the robot follows the *edge* of the line (arcs one way on the line, the other way off it); a second sensor would be smoother. If it sees no line for 1.2 s it sweeps left and right with growing sweeps, and gives up after 6 s. All timings are untuned (see `MeloConfig.h`).
 
-### `Melo.getSdkVersion()`
+## IR sensor
 
-```cpp
-String ver = Melo.getSdkVersion();  // "0.1.0"
-```
+One sensor, three meanings.
 
----
+| Function | Returns |
+|----------|---------|
+| `irDetected()` | `true` if the sensor sees a reflection. |
+| `lineDetected()` | `true` if over a dark line (no reflection). The opposite of `irDetected()`. |
+| `obstacleDetected()` | `true` if something reflects IR in front. **Not a distance**: range is set by the module's trimmer. |
+| `irRaw()` | 0/1 (digital module) or 0-4095 (analog module, `MELO_IR_ANALOG`). |
 
-### `Melo.getFirmwareVersion()`
+Many modules pull their output LOW on reflection (`MELO_IR_REFLECT_IS_LOW`, the default). Test yours with `04_IRSensor`; if the answers are backwards, flip it. An unplugged sensor cannot be detected: a floating pin gives unpredictable readings.
 
-```cpp
-String fw = Melo.getFirmwareVersion();
-```
+## Ports (diagnostics)
 
----
+The board has six identical ports. A plug-in block may put a resistor from the port's Add line to ground; the board pulls the line up to 3.3 V with 10k, so the voltage shows which block is plugged in. The ID scheme is not defined yet; these two functions exist to measure it.
 
-### `Melo.getDeviceInfo()`
+| Function | Returns |
+|----------|---------|
+| `uint16_t portRaw(port)` | Raw reading 0-4095 of the Add line, port 1-6. Near 4095 with nothing plugged in. |
+| `int32_t portOhms(port)` | Estimated resistor in ohms; `0` = shorted, `-1` = nothing plugged in. An estimate (the ESP32 ADC is not linear). |
 
-```cpp
-MeloDeviceInfo info = Melo.getDeviceInfo();
-Serial.println(info.hwVersion);
-Serial.println(info.firmwareVersion);
-Serial.println(info.sdkVersion);
-Serial.println(info.protocolVersion);
-Serial.println(info.isCompatible);
-```
+A port outside 1-6 sets `MELO_ERR_INVALID_ARG`. See `examples/10_PortScan`.
 
----
+## Light sensor
 
-### `Melo.lastError()`
+| Function | Returns |
+|----------|---------|
+| `uint8_t readLight()` | 0 (dark) to 100 (bright). |
+| `uint16_t readLightRaw()` | 0-4095. |
 
-```cpp
-MeloStatus err = Melo.lastError();
-```
+If the reading falls as light rises, set `MELO_LIGHT_BRIGHT_IS_HIGH` to 0.
 
-Returns the last error code as a `MeloStatus` enum value.
+## LED
 
----
+| Function | Description |
+|----------|-------------|
+| `led(bool on)` | On or off. |
+| `ledBlink(times, onMs, offMs = 0)` | Blink (blocking). `offMs` 0 means the same as `onMs`. |
 
-### `Melo.lastErrorMessage()`
+## Buzzer
 
-```cpp
-String msg = Melo.lastErrorMessage();
-// Example: "Error: Sensor read failed. Check sensor connections."
-```
+| Function | Description |
+|----------|-------------|
+| `beep(frequencyHz, durationMs)` | Play a tone and wait (blocking). 20-20000 Hz; 0 = silence. |
+| `startBeep(frequencyHz)` | Start a continuous tone (non-blocking). |
+| `stopBeep()` | Stop it. |
 
-Returns a human-readable description of the last error.
+## Program
 
----
+| Function | Description |
+|----------|-------------|
+| `halt()` | Stop the wheels, silence the buzzer, turn the LED off, then wait forever. Melo Blocks ends every program with it so the robot never keeps driving. |
 
-### `Melo.printStatus()`
+## Status codes
 
-```cpp
-Melo.printStatus();
-```
-
-Prints device info and status to Serial Monitor. Useful for diagnostics.
-
----
-
-## Robot-Level Movement APIs
-
-### `Melo.moveForward(speed)`
-
-Drive the robot forward.
-
-```cpp
-Melo.moveForward();      // Default 70% speed
-Melo.moveForward(50);    // 50% speed
-```
-
-| Parameter | Type | Range | Default | Description |
-|-----------|------|-------|---------|-------------|
-| `speed` | `uint8_t` | 0–100 | 70 | Speed as percentage of maximum |
-
----
-
-### `Melo.moveBackward(speed)`
-
-Drive the robot backward.
-
-```cpp
-Melo.moveBackward(60);
-```
-
-| Parameter | Type | Range | Default | Description |
-|-----------|------|-------|---------|-------------|
-| `speed` | `uint8_t` | 0–100 | 70 | Speed as percentage of maximum |
-
----
-
-### `Melo.turnLeft(speed)`
-
-Turn the robot left (counter-clockwise) using differential drive.
-
-```cpp
-Melo.turnLeft();     // Default 60% speed
-Melo.turnLeft(45);   // 45% speed
-```
-
-| Parameter | Type | Range | Default | Description |
-|-----------|------|-------|---------|-------------|
-| `speed` | `uint8_t` | 0–100 | 60 | Turn speed as percentage |
-
----
-
-### `Melo.turnRight(speed)`
-
-Turn the robot right (clockwise).
-
-```cpp
-Melo.turnRight(60);
-```
-
----
-
-### `Melo.stop()`
-
-Stop all motors with active braking.
-
-```cpp
-Melo.stop();
-```
-
----
-
-### `Melo.coast()`
-
-Coast all motors to a stop (no active braking, motors spin down freely).
-
-```cpp
-Melo.coast();
-```
-
----
-
-## Component-Level Motor API
-
-### `Melo.motor(motorId, speed)`
-
-Set individual motor speed and direction.
-
-```cpp
-Melo.motor(MOTOR_LEFT, 80);    // Left motor forward at 80%
-Melo.motor(MOTOR_RIGHT, -50);  // Right motor backward at 50%
-Melo.motor(MOTOR_BOTH, 70);    // Both motors forward at 70%
-```
-
-| Parameter | Type | Values | Description |
-|-----------|------|--------|-------------|
-| `motorId` | `MeloMotor` | `MOTOR_LEFT`, `MOTOR_RIGHT`, `MOTOR_BOTH` | Which motor to set |
-| `speed` | `int8_t` | -100 to 100 | Speed: positive=forward, negative=backward, 0=brake |
-
----
-
-## Servo APIs
-
-### `Melo.servo(servoId, angle)`
-
-Move a servo to a target angle.
-
-```cpp
-Melo.servo(1, 90);    // Move servo 1 to 90 degrees (center)
-Melo.servo(1, 0);     // Move servo 1 to 0 degrees
-Melo.servo(1, 180);   // Move servo 1 to 180 degrees
-```
-
-| Parameter | Type | Range | Description |
-|-----------|------|-------|-------------|
-| `servoId` | `uint8_t` | 1 | Servo number (1-based) |
-| `angle` | `uint8_t` | 0–180 | Target angle in degrees. Clamped to safe limits. |
-
----
-
-### `Melo.servoCenter(servoId)`
-
-Move servo to center position (90 degrees).
-
-```cpp
-Melo.servoCenter();    // Center servo 1
-Melo.servoCenter(1);   // Explicit servo 1
-```
-
----
-
-## Sensor APIs
-
-### `Melo.readDistance()`
-
-Read distance from ultrasonic sensor in centimeters.
-
-```cpp
-float distance = Melo.readDistance();
-
-if (distance < 0) {
-    Serial.println("Out of range or error");
-} else {
-    Serial.println("Distance: " + String(distance) + " cm");
-}
-```
-
-| | |
-|---|---|
-| **Returns** | `float` — distance in cm. `-1.0` if out of range or error |
-| **Valid range** | 2.0 – 400.0 cm |
-| **Blocking** | ~30ms per call |
-| **Min interval** | 50ms recommended between calls |
-
----
-
-### `Melo.obstacleDetected(thresholdCm)`
-
-Check if an obstacle is closer than a threshold distance.
-
-```cpp
-if (Melo.obstacleDetected(20.0)) {
-    Melo.stop();
-}
-```
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `thresholdCm` | `float` | 20.0 | Distance threshold in cm |
-
-| | |
-|---|---|
-| **Returns** | `bool` — `true` if obstacle detected within threshold |
-
----
-
-### `Melo.readLine()`
-
-Read line sensor.
-
-```cpp
-bool onLine = Melo.readLine();
-if (onLine) {
-    // Line detected — dark surface
-}
-```
-
-| | |
-|---|---|
-| **Returns** | `bool` — `true` if line (dark surface) detected |
-
----
-
-### `Melo.readLight()`
-
-Read ambient light level.
-
-```cpp
-uint16_t light = Melo.readLight();  // 0-4095 (ESP32 12-bit ADC)
-```
-
-| | |
-|---|---|
-| **Returns** | `uint16_t` — raw ADC value 0–4095. Higher = brighter. |
-
----
-
-## LED APIs
-
-### `Melo.led(ledId, on)`
-
-Set LED state.
-
-```cpp
-Melo.led(1, true);   // LED 1 on
-Melo.led(1, false);  // LED 1 off
-```
-
-| Parameter | Type | Values | Description |
-|-----------|------|--------|-------------|
-| `ledId` | `uint8_t` | 1 | LED number (1-based) |
-| `on` | `bool` | true/false | LED state |
-
----
-
-### `Melo.ledBlink(ledId, times, onMs, offMs)`
-
-Blink LED. **Blocking.**
-
-```cpp
-Melo.ledBlink(1, 3, 200);       // LED 1, 3 blinks, 200ms on, 200ms off
-Melo.ledBlink(1, 5, 100, 50);   // LED 1, 5 blinks, 100ms on, 50ms off
-```
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `ledId` | `uint8_t` | LED number (1-based) |
-| `times` | `uint8_t` | Number of blinks |
-| `onMs` | `uint16_t` | On duration in milliseconds |
-| `offMs` | `uint16_t` | Off duration in milliseconds (default = onMs) |
-
----
-
-## Buzzer APIs
-
-### `Melo.beep(frequencyHz, durationMs)`
-
-Play a tone. **Blocking.**
-
-```cpp
-Melo.beep(1000, 500);  // 1000 Hz for 500ms
-Melo.beep(440, 200);   // A4 note for 200ms
-Melo.beep(0, 500);     // Silence for 500ms
-```
-
-| Parameter | Type | Range | Description |
-|-----------|------|-------|-------------|
-| `frequencyHz` | `uint16_t` | 0–20000 | Tone frequency in Hz. 0 = silence. |
-| `durationMs` | `uint32_t` | 0–60000 | Duration in milliseconds |
-
----
-
-### `Melo.startBeep(frequencyHz)`
-
-Start a continuous tone. **Non-blocking.** Call `Melo.stopBeep()` to end.
-
-```cpp
-Melo.startBeep(880);
-delay(500);
-Melo.stopBeep();
-```
-
----
-
-### `Melo.stopBeep()`
-
-Stop any currently playing tone.
-
-```cpp
-Melo.stopBeep();
-```
-
----
-
-## Error Codes
-
-| Code | Value | Description |
-|------|-------|-------------|
+| Code | Value | Meaning |
+|------|-------|---------|
 | `MELO_OK` | 0 | Success |
-| `MELO_ERR_NOT_INIT` | 1 | `Melo.begin()` not called |
-| `MELO_ERR_DEVICE_NOT_FOUND` | 2 | Melo board not detected |
-| `MELO_ERR_TIMEOUT` | 3 | Operation timed out |
-| `MELO_ERR_FIRMWARE_MISMATCH` | 4 | Firmware incompatible with SDK |
-| `MELO_ERR_PROTOCOL_MISMATCH` | 5 | Protocol version mismatch |
-| `MELO_ERR_INVALID_ARG` | 6 | Invalid argument value |
-| `MELO_ERR_INVALID_CMD` | 7 | Unknown command |
-| `MELO_ERR_SENSOR` | 8 | Sensor read failure |
-| `MELO_ERR_CALIBRATION` | 9 | Calibration failure |
-| `MELO_ERR_MOTOR` | 10 | Motor error |
-| `MELO_ERR_TRANSPORT` | 11 | Communication error |
+| `MELO_ERR_NOT_INIT` | 1 | `begin()` not called, or it failed |
+| `MELO_ERR_INVALID_ARG` | 2 | A port number outside 1-6 (other out-of-range values are clamped instead) |
+| `MELO_ERR_PIN` | 3 | A pin could not be set up |
+| `MELO_ERR_LINE_LOST` | 4 | `followLine()` gave up |
 
----
+## Configuration
 
-## Common Patterns
-
-### Obstacle avoidance
-```cpp
-void loop() {
-    if (Melo.obstacleDetected(20.0)) {
-        Melo.stop();
-        Melo.beep(1000, 200);
-        Melo.moveBackward(50);
-        delay(500);
-        Melo.turnRight();
-        delay(400);
-    } else {
-        Melo.moveForward(60);
-    }
-    delay(50);
-}
-```
-
-### Error checking
-```cpp
-MeloStatus status = Melo.begin();
-if (status != MELO_OK) {
-    Serial.println("FAILED: " + Melo.statusMessage(status));
-    while (true) { delay(1000); }  // Halt
-}
-```
-
-### Individual motor control
-```cpp
-// Gentle arc to the left
-Melo.motor(MOTOR_LEFT, 30);   // Left motor slow
-Melo.motor(MOTOR_RIGHT, 70);  // Right motor fast
-delay(800);
-Melo.stop();
-```
+All in [src/MeloConfig.h](../src/MeloConfig.h): the port pin table (`MELO_DEFAULT_PORTn_*`), which port each part is in (`MELO_IR_PORT`, ...), wheel pins, wheel direction (`MELO_*_WHEEL_INVERTED`), servo trim, IR and light polarity, line-following timings. A `#define` in a sketch does **not** change them, because the library is compiled separately; edit the header, or pass `-DNAME=value` as a compiler flag for the whole build.

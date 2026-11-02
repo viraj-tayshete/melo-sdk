@@ -1,106 +1,109 @@
 /**
  * Melo.cpp
  *
- * Melo SDK — Main API Implementation
+ * Melo SDK - main API implementation. Wires the drivers to the public API.
  *
- * This file wires all subsystem drivers to the public Melo API.
- *
- * SDK Version: 0.1.0
+ * SDK Version: 0.2.0
  */
 
 #include "Melo.h"
 
-// ---------------------------------------------------------------------------
-// Global Singleton Definition
-// ---------------------------------------------------------------------------
-MeloClass Melo;
+// Two parts sharing a pin would silently fight each other.
+static constexpr bool meloPinsDistinct(const int* pins, int n) {
+    for (int i = 0; i < n; i++)
+        for (int j = i + 1; j < n; j++)
+            if (pins[i] == pins[j]) return false;
+    return true;
+}
+static constexpr int kMeloPins[] = {
+    MELO_LEFT_WHEEL_PIN, MELO_RIGHT_WHEEL_PIN,
+    MELO_PORT1_SIGNAL_PIN, MELO_PORT2_SIGNAL_PIN, MELO_PORT3_SIGNAL_PIN,
+    MELO_PORT4_SIGNAL_PIN, MELO_PORT5_SIGNAL_PIN, MELO_PORT6_SIGNAL_PIN,
+    MELO_PORT1_ADD_PIN, MELO_PORT2_ADD_PIN, MELO_PORT3_ADD_PIN,
+    MELO_PORT4_ADD_PIN, MELO_PORT5_ADD_PIN, MELO_PORT6_ADD_PIN
+};
+static_assert(meloPinsDistinct(kMeloPins, sizeof(kMeloPins) / sizeof(kMeloPins[0])),
+              "Melo: two wheel or port pins in MeloConfig.h are the same pin");
 
-// ---------------------------------------------------------------------------
-// Constructor — Initialize drivers with pin config from MeloConfig.h
-// ---------------------------------------------------------------------------
+// Each part must sit on its own port.
+static_assert(MELO_IR_PORT >= 1 && MELO_IR_PORT <= MELO_PORT_COUNT &&
+              MELO_LIGHT_PORT >= 1 && MELO_LIGHT_PORT <= MELO_PORT_COUNT &&
+              MELO_LED_PORT >= 1 && MELO_LED_PORT <= MELO_PORT_COUNT &&
+              MELO_BUZZER_PORT >= 1 && MELO_BUZZER_PORT <= MELO_PORT_COUNT,
+              "Melo: a part is assigned to a port outside 1-6");
+static_assert(MELO_IR_PORT != MELO_LIGHT_PORT && MELO_IR_PORT != MELO_LED_PORT &&
+              MELO_IR_PORT != MELO_BUZZER_PORT && MELO_LIGHT_PORT != MELO_LED_PORT &&
+              MELO_LIGHT_PORT != MELO_BUZZER_PORT && MELO_LED_PORT != MELO_BUZZER_PORT,
+              "Melo: two parts are assigned to the same port");
+
+static const uint8_t kMeloAddPins[MELO_PORT_COUNT] = {
+    MELO_PORT1_ADD_PIN, MELO_PORT2_ADD_PIN, MELO_PORT3_ADD_PIN,
+    MELO_PORT4_ADD_PIN, MELO_PORT5_ADD_PIN, MELO_PORT6_ADD_PIN
+};
+
+MeloClass Melo;
 
 MeloClass::MeloClass()
     : _initialized(false),
       _lastError(MELO_OK),
-      _leftMotor(MOTOR_LEFT_PWM_PIN,  MOTOR_LEFT_DIR1_PIN,  MOTOR_LEFT_DIR2_PIN,  MOTOR_LEFT_PWM_CH),
-      _rightMotor(MOTOR_RIGHT_PWM_PIN, MOTOR_RIGHT_DIR1_PIN, MOTOR_RIGHT_DIR2_PIN, MOTOR_RIGHT_PWM_CH),
-      _distanceSensor(ULTRASONIC_TRIGGER_PIN, ULTRASONIC_ECHO_PIN),
-      _lineSensor(LINE_SENSOR_PIN, LINE_SENSOR_ANALOG),
-      _servo1(SERVO_1_PIN),
-      _led1(LED_1_PIN, true),         // Active HIGH assumed
-      _buzzer(BUZZER_PIN, BUZZER_PWM_CH)
+      _leftWheel(MELO_LEFT_WHEEL_PIN,   MELO_LEFT_WHEEL_INVERTED,  MELO_LEFT_WHEEL_TRIM_US),
+      _rightWheel(MELO_RIGHT_WHEEL_PIN, MELO_RIGHT_WHEEL_INVERTED, MELO_RIGHT_WHEEL_TRIM_US),
+      _ir(MELO_IR_PIN),
+      _led(MELO_LED_PIN, MELO_LED_ACTIVE_HIGH),
+      _buzzer(MELO_BUZZER_PIN),
+      _lastFollowMs(0)
 {
 }
 
 // ---------------------------------------------------------------------------
-// begin()
+// SYSTEM
 // ---------------------------------------------------------------------------
 
 MeloStatus MeloClass::begin() {
-    // 1. Initialize serial output for diagnostics
-    Serial.begin(MELO_SERIAL_BAUD);
-    delay(100);  // Allow serial to settle
+    if (_initialized) return MELO_OK;
 
-    _debugPrint("Melo SDK v" + String(MELO_SDK_VERSION) + " initializing...");
+    Serial.begin(MELO_SERIAL_BAUD);   // does not wait for a serial monitor
+    delay(100);
+    _debugPrint(F("Melo SDK v" MELO_SDK_VERSION " starting..."));
 
-    // 2. Initialize motor subsystem
-    _leftMotor.begin();
-    _rightMotor.begin();
-    _debugPrint("[OK] Motors initialized");
-
-    // 3. Initialize sensor subsystems
-    _distanceSensor.begin();
-    _lineSensor.begin();
-    _debugPrint("[OK] Sensors initialized");
-
-    // 4. Initialize servo
-    _servo1.begin();
-    _debugPrint("[OK] Servo initialized");
-
-    // 5. Initialize LED
-    _led1.begin();
-    _debugPrint("[OK] LED initialized");
-
-    // 6. Initialize buzzer
     _buzzer.begin();
-    _debugPrint("[OK] Buzzer initialized");
+    _led.begin();
 
-    // 7. Play startup tone to confirm successful initialization
+    if (!_leftWheel.begin() || !_rightWheel.begin()) {
+        _leftWheel.stop();
+        _rightWheel.stop();
+        _setError(MELO_ERR_PIN);
+        _debugPrint(F("[FAIL] A wheel pin could not be set up. Check MELO_LEFT_WHEEL_PIN / MELO_RIGHT_WHEEL_PIN."));
+        _buzzer.playErrorTone();
+        return MELO_ERR_PIN;
+    }
+
+    _ir.begin();
+    pinMode(MELO_LIGHT_PIN, INPUT);
+    for (uint8_t i = 0; i < MELO_PORT_COUNT; i++) pinMode(kMeloAddPins[i], INPUT);
+
     _buzzer.playStartupTone();
-
-    // 8. Blink LED to confirm ready state
-    _led1.blink(2, 200, 100);
+    _led.blink(2, 200, 100);
 
     _initialized = true;
     _lastError = MELO_OK;
-
-    _debugPrint("Melo ready!");
-    printStatus();
-
+    _debugPrint(F("Melo ready."));
     return MELO_OK;
 }
-
-// ---------------------------------------------------------------------------
-// SYSTEM INFO
-// ---------------------------------------------------------------------------
 
 String MeloClass::getSdkVersion() const {
     return String(MELO_SDK_VERSION);
 }
 
-String MeloClass::getFirmwareVersion() const {
-    // For Model A (direct Arduino), firmware version = SDK version
-    // This will be updated in Step 3 to query actual firmware
-    return String(MELO_SDK_VERSION);
-}
-
 MeloDeviceInfo MeloClass::getDeviceInfo() const {
     MeloDeviceInfo info;
-    info.hwVersion       = String(MELO_HW_VERSION);
-    info.firmwareVersion = getFirmwareVersion();
-    info.protocolVersion = MELO_PROTOCOL_VERSION;
-    info.sdkVersion      = getSdkVersion();
-    info.isCompatible    = true;  // In Model A, always compatible
+    info.sdkVersion = getSdkVersion();
+    info.hwVersion  = String(MELO_HW_VERSION);
+#ifdef ARDUINO_BOARD
+    info.board      = String(ARDUINO_BOARD);
+#else
+    info.board      = String("unknown");
+#endif
     return info;
 }
 
@@ -110,192 +113,207 @@ String MeloClass::lastErrorMessage() const {
 
 String MeloClass::statusMessage(MeloStatus status) const {
     switch (status) {
-        case MELO_OK:                   return "OK — Melo is ready";
-        case MELO_ERR_NOT_INIT:         return "Error: Melo.begin() has not been called. Call begin() in setup() first.";
-        case MELO_ERR_DEVICE_NOT_FOUND: return "Error: Melo board not detected. Check USB connection and try again.";
-        case MELO_ERR_TIMEOUT:          return "Error: Operation timed out. Check hardware connections.";
-        case MELO_ERR_FIRMWARE_MISMATCH:return "Error: Firmware version is not compatible with this SDK. Please update firmware.";
-        case MELO_ERR_PROTOCOL_MISMATCH:return "Error: Protocol version mismatch. Update SDK or firmware.";
-        case MELO_ERR_INVALID_ARG:      return "Error: Invalid argument. Check parameter ranges.";
-        case MELO_ERR_INVALID_CMD:      return "Error: Invalid command.";
-        case MELO_ERR_SENSOR:           return "Error: Sensor read failed. Check sensor connections.";
-        case MELO_ERR_CALIBRATION:      return "Error: Calibration failed. Try again or check hardware.";
-        case MELO_ERR_MOTOR:            return "Error: Motor error. Check motor and driver connections.";
-        case MELO_ERR_TRANSPORT:        return "Error: Communication transport failure.";
-        default:                        return "Error: Unknown error (" + String((int)status) + ")";
+        case MELO_OK:
+            return F("OK - Melo is ready");
+        case MELO_ERR_NOT_INIT:
+            return F("Melo is not set up. Call Melo.begin() first in setup().");
+        case MELO_ERR_INVALID_ARG:
+            return F("A value was out of range. Check the allowed range for that command.");
+        case MELO_ERR_PIN:
+            return F("A pin could not be set up. Check the wiring and the pin settings.");
+        case MELO_ERR_LINE_LOST:
+            return F("The line was lost. Put the robot back on the line and try again.");
+        default:
+            return "Unknown error (" + String((int)status) + ")";
     }
 }
 
 void MeloClass::printStatus() const {
     MeloDeviceInfo info = getDeviceInfo();
-    Serial.println("-------- Melo Status --------");
-    Serial.println("SDK Version:      " + info.sdkVersion);
-    Serial.println("Hardware Version: " + info.hwVersion);
-    Serial.println("Protocol Version: " + String(info.protocolVersion));
-    Serial.println("Initialized:      " + String(_initialized ? "YES" : "NO"));
-    Serial.println("Last Error:       " + lastErrorMessage());
-    Serial.println("-----------------------------");
+    Serial.println(F("-------- Melo Status --------"));
+    Serial.println("SDK version:  " + info.sdkVersion);
+    Serial.println("Hardware:     " + info.hwVersion);
+    Serial.println("Board:        " + info.board);
+    Serial.println(String("Ready:        ") + (_initialized ? "YES" : "NO"));
+    Serial.println("Last error:   " + lastErrorMessage());
+    Serial.println(F("-----------------------------"));
 }
 
 // ---------------------------------------------------------------------------
-// ROBOT-LEVEL MOVEMENT APIs
+// DRIVING
 // ---------------------------------------------------------------------------
 
 void MeloClass::moveForward(uint8_t speed) {
     if (!_checkInit("moveForward")) return;
-    speed = MELO_CLAMP(speed, 0, 100);
-    _leftMotor.setSpeed((int8_t)speed);
-    _rightMotor.setSpeed((int8_t)speed);
+    int8_t s = (int8_t)MELO_CLAMP((int)speed, 0, 100);
+    _leftWheel.setSpeed(s);
+    _rightWheel.setSpeed(s);
 }
 
 void MeloClass::moveBackward(uint8_t speed) {
     if (!_checkInit("moveBackward")) return;
-    speed = MELO_CLAMP(speed, 0, 100);
-    _leftMotor.setSpeed(-(int8_t)speed);
-    _rightMotor.setSpeed(-(int8_t)speed);
+    int8_t s = (int8_t)MELO_CLAMP((int)speed, 0, 100);
+    _leftWheel.setSpeed(-s);
+    _rightWheel.setSpeed(-s);
 }
 
 void MeloClass::turnLeft(uint8_t speed) {
     if (!_checkInit("turnLeft")) return;
-    speed = MELO_CLAMP(speed, 0, 100);
-    // Differential turn: right motor forward, left motor backward
-    _leftMotor.setSpeed(-(int8_t)speed);
-    _rightMotor.setSpeed((int8_t)speed);
+    int8_t s = (int8_t)MELO_CLAMP((int)speed, 0, 100);
+    _leftWheel.setSpeed(-s);
+    _rightWheel.setSpeed(s);
 }
 
 void MeloClass::turnRight(uint8_t speed) {
     if (!_checkInit("turnRight")) return;
-    speed = MELO_CLAMP(speed, 0, 100);
-    // Differential turn: left motor forward, right motor backward
-    _leftMotor.setSpeed((int8_t)speed);
-    _rightMotor.setSpeed(-(int8_t)speed);
+    int8_t s = (int8_t)MELO_CLAMP((int)speed, 0, 100);
+    _leftWheel.setSpeed(s);
+    _rightWheel.setSpeed(-s);
 }
 
 void MeloClass::stop() {
     if (!_checkInit("stop")) return;
-    _leftMotor.brake();
-    _rightMotor.brake();
+    _leftWheel.stop();
+    _rightWheel.stop();
 }
 
-void MeloClass::coast() {
-    if (!_checkInit("coast")) return;
-    _leftMotor.coast();
-    _rightMotor.coast();
+void MeloClass::wheel(MeloWheelSide side, int8_t speed) {
+    if (!_checkInit("wheel")) return;
+    speed = (int8_t)MELO_CLAMP((int)speed, -100, 100);
+    if (side == WHEEL_LEFT  || side == WHEEL_BOTH) _leftWheel.setSpeed(speed);
+    if (side == WHEEL_RIGHT || side == WHEEL_BOTH) _rightWheel.setSpeed(speed);
 }
 
-// ---------------------------------------------------------------------------
-// COMPONENT-LEVEL MOTOR API
-// ---------------------------------------------------------------------------
+void MeloClass::trimWheel(MeloWheelSide side, int16_t trimUs) {
+    if (!_checkInit("trimWheel")) return;
+    trimUs = (int16_t)MELO_CLAMP((int)trimUs, -200, 200);
+    if (side == WHEEL_LEFT  || side == WHEEL_BOTH) _leftWheel.setTrimUs(trimUs);
+    if (side == WHEEL_RIGHT || side == WHEEL_BOTH) _rightWheel.setTrimUs(trimUs);
+}
 
-void MeloClass::motor(MeloMotor m, int8_t speed) {
-    if (!_checkInit("motor")) return;
-    speed = MELO_CLAMP(speed, -100, 100);
-    switch (m) {
-        case MOTOR_LEFT:
-            _leftMotor.setSpeed(speed);
-            break;
-        case MOTOR_RIGHT:
-            _rightMotor.setSpeed(speed);
-            break;
-        case MOTOR_BOTH:
-            _leftMotor.setSpeed(speed);
-            _rightMotor.setSpeed(speed);
-            break;
+bool MeloClass::followLine(uint8_t speed) {
+    if (!_checkInit("followLine")) return false;
+
+    uint32_t now = millis();
+    if (_lastFollowMs != 0 && (uint32_t)(now - _lastFollowMs) > MELO_LINE_NEW_RUN_GAP_MS) {
+        _lineLogic.reset();
+    }
+    _lastFollowMs = now;
+
+    MeloDriveCmd cmd = _lineLogic.step(lineDetected(), now, speed);
+    if (_lineLogic.state() == LINE_GAVE_UP) {
+        _leftWheel.stop();
+        _rightWheel.stop();
+        _setError(MELO_ERR_LINE_LOST);
+        _buzzer.playErrorTone();
+        _lastFollowMs = 0;
+        _lineLogic.reset();
+        return false;
+    }
+    _leftWheel.setSpeed(cmd.left);
+    _rightWheel.setSpeed(cmd.right);
+    delay(MELO_LINE_STEP_MS);   // also lets the ESP32 background tasks run
+    return true;
+}
+
+void MeloClass::resetLineFollow() {
+    _lineLogic.reset();
+    _lastFollowMs = 0;
+}
+
+void MeloClass::halt() {
+    _leftWheel.stop();
+    _rightWheel.stop();
+    _buzzer.stopTone();
+    _led.set(false);
+    while (true) {
+        delay(1000);
     }
 }
 
 // ---------------------------------------------------------------------------
-// SERVO APIs
+// IR SENSOR
 // ---------------------------------------------------------------------------
 
-void MeloClass::servo(uint8_t servoNum, uint8_t angle) {
-    if (!_checkInit("servo")) return;
-    // Only servo 1 is supported in v0.1.0
-    if (servoNum == 1) {
-        _servo1.setAngle(angle);
-    } else {
-        _setError(MELO_ERR_INVALID_ARG);
-        _debugPrint("servo(): Invalid servo number " + String(servoNum) + ". Only servo 1 is supported.");
-    }
+bool MeloClass::irDetected() {
+    if (!_checkInit("irDetected")) return false;
+    return _ir.reflecting();
 }
 
-void MeloClass::servoCenter(uint8_t servoNum) {
-    if (!_checkInit("servoCenter")) return;
-    if (servoNum == 1) {
-        _servo1.center();
-    }
+bool MeloClass::lineDetected() {
+    if (!_checkInit("lineDetected")) return false;
+    return !_ir.reflecting();
 }
 
-// ---------------------------------------------------------------------------
-// SENSOR APIs
-// ---------------------------------------------------------------------------
-
-float MeloClass::readDistance() {
-    if (!_checkInit("readDistance")) return -1.0f;
-    return _distanceSensor.readCm();
-}
-
-MeloDistanceReading MeloClass::readDistanceFull() {
-    MeloDistanceReading err_result;
-    if (!_checkInit("readDistanceFull")) {
-        err_result.distanceCm = -1.0f;
-        err_result.valid = false;
-        err_result.status = MELO_ERR_NOT_INIT;
-        return err_result;
-    }
-    return _distanceSensor.read();
-}
-
-bool MeloClass::obstacleDetected(float thresholdCm) {
+bool MeloClass::obstacleDetected() {
     if (!_checkInit("obstacleDetected")) return false;
-    return _distanceSensor.isCloserThan(thresholdCm);
+    return _ir.reflecting();
 }
 
-bool MeloClass::readLine() {
-    if (!_checkInit("readLine")) return false;
-    return _lineSensor.onLine();
-}
-
-MeloLineSensorReading MeloClass::readLineFull() {
-    MeloLineSensorReading err_result;
-    if (!_checkInit("readLineFull")) {
-        err_result.onLine = false;
-        err_result.rawValue = 0;
-        err_result.valid = false;
-        err_result.status = MELO_ERR_NOT_INIT;
-        return err_result;
-    }
-    return _lineSensor.read();
-}
-
-uint16_t MeloClass::readLight() {
-    if (!_checkInit("readLight")) return 0;
-    return (uint16_t)analogRead(LIGHT_SENSOR_PIN);
+uint16_t MeloClass::irRaw() {
+    if (!_checkInit("irRaw")) return 0;
+    return _ir.raw();
 }
 
 // ---------------------------------------------------------------------------
-// LED APIs
+// PORTS
 // ---------------------------------------------------------------------------
 
-void MeloClass::led(uint8_t ledNum, bool on) {
-    if (!_checkInit("led")) return;
-    if (ledNum == 1) {
-        _led1.set(on);
-    } else {
+uint16_t MeloClass::portRaw(uint8_t port) {
+    if (!_checkInit("portRaw")) return 0;
+    if (port < 1 || port > MELO_PORT_COUNT) {
         _setError(MELO_ERR_INVALID_ARG);
-        _debugPrint("led(): Invalid LED number " + String(ledNum));
+        return 0;
     }
+    return (uint16_t)analogRead(kMeloAddPins[port - 1]);
 }
 
-void MeloClass::ledBlink(uint8_t ledNum, uint8_t times, uint16_t onMs, uint16_t offMs) {
-    if (!_checkInit("ledBlink")) return;
-    if (ledNum == 1) {
-        _led1.blink(times, onMs, offMs);
+int32_t MeloClass::portOhms(uint8_t port) {
+    if (!_checkInit("portOhms")) return -1;
+    if (port < 1 || port > MELO_PORT_COUNT) {
+        _setError(MELO_ERR_INVALID_ARG);
+        return -1;
     }
+    return meloPortOhms((uint16_t)analogRead(kMeloAddPins[port - 1]));
 }
 
 // ---------------------------------------------------------------------------
-// BUZZER APIs
+// LIGHT SENSOR
+// ---------------------------------------------------------------------------
+
+uint16_t MeloClass::readLightRaw() {
+    if (!_checkInit("readLightRaw")) return 0;
+    return (uint16_t)analogRead(MELO_LIGHT_PIN);
+}
+
+uint8_t MeloClass::readLight() {
+    if (!_checkInit("readLight")) return 0;
+    uint32_t raw = (uint32_t)analogRead(MELO_LIGHT_PIN);
+    if (raw > MELO_ADC_MAX) raw = MELO_ADC_MAX;
+    uint8_t pct = (uint8_t)(raw * 100 / MELO_ADC_MAX);
+#if MELO_LIGHT_BRIGHT_IS_HIGH
+    return pct;
+#else
+    return (uint8_t)(100 - pct);
+#endif
+}
+
+// ---------------------------------------------------------------------------
+// LED
+// ---------------------------------------------------------------------------
+
+void MeloClass::led(bool on) {
+    if (!_checkInit("led")) return;
+    _led.set(on);
+}
+
+void MeloClass::ledBlink(uint8_t times, uint16_t onMs, uint16_t offMs) {
+    if (!_checkInit("ledBlink")) return;
+    _led.blink(times, onMs, offMs);
+}
+
+// ---------------------------------------------------------------------------
+// BUZZER
 // ---------------------------------------------------------------------------
 
 void MeloClass::beep(uint16_t frequencyHz, uint32_t durationMs) {
@@ -314,7 +332,7 @@ void MeloClass::stopBeep() {
 }
 
 // ---------------------------------------------------------------------------
-// Private Helpers
+// Private helpers
 // ---------------------------------------------------------------------------
 
 void MeloClass::_setError(MeloStatus err) {
@@ -327,10 +345,12 @@ void MeloClass::_debugPrint(const String& msg) const {
     }
 }
 
-bool MeloClass::_checkInit(const char* callerName) const {
+bool MeloClass::_checkInit(const char* callerName) {
     if (!_initialized) {
-        Serial.println("[Melo] ERROR: " + String(callerName) +
-                       "() called before Melo.begin(). Call begin() in setup() first.");
+        _setError(MELO_ERR_NOT_INIT);
+        Serial.print(F("[Melo] "));
+        Serial.print(callerName);
+        Serial.println(F("() was called before Melo.begin(). Put Melo.begin() first in setup()."));
         return false;
     }
     return true;

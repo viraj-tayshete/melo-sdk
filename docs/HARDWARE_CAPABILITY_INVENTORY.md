@@ -1,158 +1,77 @@
-# Melo — Hardware Capability Inventory
+# Melo - Hardware Inventory
 
-**Version:** 1.0  
-**Step:** 1 — Reverse Engineering Output  
-**Status:** UNVERIFIED — All entries are based on MELO_MASTER_BRIEF.md assumptions.
-**Must be updated when PCB schematics / firmware code becomes available.**
+Last updated 2026-11-02. **CONFIRMED** = stated by the project owner. **ASSUMED** = my working assumption. **UNKNOWN** = needs checking on the hardware.
 
----
+## Controller
 
-## MOTORS
+| Item | Value | Status |
+|------|-------|--------|
+| Board | Arduino Nano ESP32 (ESP32-S3), `esp32:esp32:nano_nora` | CONFIRMED |
+| Core | Espressif `esp32` package 3.x (built with 3.3.3); Arduino's `arduino:esp32` is core 2.x and unsupported | CHOSEN |
+| Logic level | 3.3 V, pins not 5 V tolerant | from third-party guides, verify |
+| Upload | USB DFU | from the core's board definition |
 
-| ID | Name | Interface | Direction Control | Speed Control | Notes |
-|----|------|-----------|-------------------|---------------|-------|
-| M1 | Left Motor | H-bridge IC | GPIO (2 pins) | PWM (1 pin) | ASSUMED |
-| M2 | Right Motor | H-bridge IC | GPIO (2 pins) | PWM (1 pin) | ASSUMED |
+## Parts
 
-**Motor driver IC:** UNKNOWN — Must verify (L298N / DRV8833 / TB6612FNG)  
-**Speed unit:** 0–100 (percent), mapped to 0–255 PWM internally  
-**Direction values:** FORWARD / BACKWARD
+| Part | Details | Status |
+|------|---------|--------|
+| Wheels | 2 x SG90, continuous rotation (360°), one per wheel | CONFIRMED |
+| Drive | Differential, servos mounted mirrored | ASSUMED (flip `MELO_*_WHEEL_INVERTED` if wrong) |
+| Servo creep at stop | Unknown; `stop()` cuts the pulse | UNKNOWN |
+| IR sensor | 1, mounted underneath in the middle; line and obstacle use | CONFIRMED |
+| IR module type | Digital or analog, polarity | UNKNOWN |
+| Light sensor | Present | CONFIRMED |
+| Light circuit | Output direction, ADC-capable pin | UNKNOWN |
+| LED | 1 simple white LED, active high | CONFIRMED / ASSUMED polarity |
+| Buzzer | Present; assumed passive | CONFIRMED / ASSUMED type |
+| Motor driver, DC motors | None | CONFIRMED |
+| Buttons, distance sensor, IMU, battery sensing | None | CONFIRMED |
 
----
+## Board (PCB), from the KiCad schematics
 
-## SERVOS
+Source: `MELOlogic.kicad_sch` (main board) and `MELOlogicblock.kicad_sch` ("Melo Block PCB", 25-08-2026). Connections were computed by script; no electrical rules check was run.
 
-| ID | Name | Interface | Range | Center | Notes |
-|----|------|-----------|-------|--------|-------|
-| S1 | Servo 1 | PWM (50Hz) | 0–180 deg | 90 deg | ASSUMED |
+**Main board**
 
-**Servo count:** UNKNOWN — assumed 1+; must verify on PCB  
-**Safe limits:** To be defined per physical servo spec
+| Item | Detail |
+|------|--------|
+| Ports | Six identical 4-pin ports J1-J6 (2.00 mm headers) |
+| Port pin 1 | Signal, to its own pad J13-J18 |
+| Port pin 2 | "Add", to its own pad J7-J12, with a 10k pull-up to 3.3 V (R7..R2) |
+| Port pin 3 / 4 | 3.3 V / GND |
+| Regulator | U2 AMS1117-3.3 (SOT-223); C1 10 uF on the +5 V input, C2 22 uF on the 3.3 V output |
+| Power input | J20 "Vin pin" (+5 V), J19 GND pin |
+| Power LED | D1 with R1 1k5 on 3.3 V (about 1 mA) |
+| Controller | **No Nano symbol.** The 14 pads J7-J20 (6 Add, 6 Signal, GND, +5 V) connect to it; the mapping is unknown |
 
----
+Port to pad: J1 = Signal J13 / Add J7, J2 = J14 / J8, J3 = J15 / J9, J4 = J16 / J10, J5 = J17 / J11, J6 = J18 / J12.
 
-## SENSORS
+**Block module:** passes Signal, 3.3 V and GND from a JST PH socket to a header, and connects one resistor R1 (value not set) from the Add pin to GND. With the 10k pull-up this forms a voltage divider. That it is meant to identify the block is an inference; the scheme is not defined.
 
-### Distance Sensor
+**Open electrical questions**
 
-| Property | Value | Status |
-|----------|-------|--------|
-| Type | Ultrasonic (HC-SR04 assumed) | ASSUMED |
-| Interface | Trigger GPIO out + Echo GPIO in | ASSUMED |
-| Range | 2–400 cm | ASSUMED |
-| Data type | float (cm) | ASSUMED |
-| Sampling rate | Max ~20 Hz (50ms per reading) | ASSUMED |
-| Error return | -1.0 (out of range / timeout) | DECIDED |
+- The ports only carry 3.3 V. The SG90 servos are specified for about 4.8-6 V, and the schematic shows no 5 V reaching any port, so how the wheel servos are powered is unknown.
+- What supplies J20's +5 V (the Nano ESP32 has no ordinary 5 V output pin).
+- AMS1117 output-capacitor requirements versus the 22 uF ceramic: check the datasheet.
 
-### Line Sensor
+## Pin map (PLACEHOLDERS: the pad-to-controller mapping is unknown)
 
-| Property | Value | Status |
-|----------|-------|--------|
-| Type | IR reflective (TCRT5000 assumed) | ASSUMED |
-| Interface | Analog GPIO (or digital with threshold) | ASSUMED |
-| Output | 0=dark/line, 1=light/no-line (or raw ADC) | ASSUMED |
-| Count | UNKNOWN — 1 or more sensors | FLAG |
+| Signal | Nano ESP32 pin | Part (placeholder assignment) |
+|--------|----------------|-------------------------------|
+| Port 1 Signal / Add | D2 / A0 | IR sensor |
+| Port 2 Signal / Add | D3 / A1 | Light sensor |
+| Port 3 Signal / Add | D4 / A2 | LED |
+| Port 4 Signal / Add | D5 / A3 | Buzzer |
+| Port 5 Signal / Add | D6 / A4 | free |
+| Port 6 Signal / Add | D7 / A5 | free |
+| Left wheel servo | D8 | own pin (not known to use a port) |
+| Right wheel servo | D9 | own pin (not known to use a port) |
 
-### Light Sensor
+## To find out
 
-| Property | Value | Status |
-|----------|-------|--------|
-| Type | LDR / phototransistor | ASSUMED |
-| Interface | Analog GPIO | ASSUMED |
-| Output | Raw ADC value (0–4095 on ESP32) | ASSUMED |
-
-### Buttons / Digital Inputs
-
-| Property | Value | Status |
-|----------|-------|--------|
-| Count | UNKNOWN | FLAG: Must verify |
-| Interface | GPIO with internal pull-up | ASSUMED |
-| Active state | LOW when pressed | ASSUMED |
-
----
-
-## LEDS
-
-| ID | Type | Interface | Notes |
-|----|------|-----------|-------|
-| LED1 | Digital output (simple) | GPIO | ASSUMED — RGB unknown |
-
-**RGB support:** UNKNOWN — simple digital assumed for now  
-**Count:** UNKNOWN — at least 1
-
----
-
-## BUZZER
-
-| Property | Value | Status |
-|----------|-------|--------|
-| Type | Passive buzzer | ASSUMED |
-| Interface | GPIO with PWM (tone()) | ASSUMED |
-| Frequency range | 20–20000 Hz | ASSUMED |
-| Duration unit | Milliseconds | DECIDED |
-| Behavior | Blocking by default; async TBD | DECIDED |
-
----
-
-## CONTROLLER / MCU
-
-| Property | Value | Status |
-|----------|-------|--------|
-| Platform | ESP32 (assumed) | FLAG: Must verify exact model |
-| CPU | Xtensa LX6 dual-core 240MHz (ESP32) | ASSUMED |
-| Flash | 4MB (standard) | ASSUMED |
-| SRAM | 520KB (ESP32) | ASSUMED |
-| Arduino support | Yes (arduino-esp32 core) | ASSUMED |
-| USB interface | USB-UART bridge (CP2102 / CH340) | ASSUMED |
-| Serial speed | 115200 baud | DECIDED |
-| PWM resolution | 8-bit (0–255) via analogWrite / ledcWrite | ASSUMED |
-| ADC resolution | 12-bit (0–4095) | ASSUMED |
-
----
-
-## PIN MAPPING (PLACEHOLDER)
-
-**STATUS: ALL PINS ARE UNKNOWN — Must be verified against PCB schematic**
-
-| Signal | GPIO | Notes |
-|--------|------|-------|
-| Motor Left PWM | TBD | |
-| Motor Left DIR1 | TBD | |
-| Motor Left DIR2 | TBD | |
-| Motor Right PWM | TBD | |
-| Motor Right DIR1 | TBD | |
-| Motor Right DIR2 | TBD | |
-| Servo 1 PWM | TBD | |
-| Distance Trigger | TBD | |
-| Distance Echo | TBD | |
-| Line Sensor | TBD | |
-| Light Sensor | TBD | |
-| LED 1 | TBD | |
-| Buzzer | TBD | |
-| Button 1 | TBD | |
-
-All of the above must be defined in `src/MeloConfig.h` to allow easy reconfiguration when confirmed.
-
----
-
-## VERSION TRACKING
-
-| Version Field | Value | Notes |
-|--------------|-------|-------|
-| Hardware Rev | 1.0 (assumed) | FLAG: confirm with team |
-| Firmware Version | TBD by firmware team | |
-| Protocol Version | 1 | Initial |
-| SDK Version | 0.1.0 | Initial development |
-
----
-
-## OPEN FLAGS (Must Resolve)
-
-1. **Motor driver IC** — affects PWM/GPIO wiring in Motor.cpp
-2. **ESP32 vs ESP8266** — affects ledcWrite vs analogWrite, ADC resolution, dual-core behavior
-3. **Servo count** — affects servo API design
-4. **LED type (simple vs RGB)** — affects LED API shape
-5. **Line sensor count** — affects readLine() return type (single value vs array)
-6. **Button count** — affects button API design
-7. **Exact pin mapping** — must come from PCB schematic
-8. **Execution model** — Model A vs B vs C (see ARCHITECTURE.md)
+1. Which controller pin each pad J7-J18 reaches, and the source of J20's +5 V.
+2. How the wheel servos are powered and connected (ports or separate connectors).
+3. The ID scheme: resistor value of each block. `examples/10_PortScan` measures them on the real board once the pins are right.
+4. Which block goes in which port.
+5. IR module type and output polarity, and the light sensor circuit.
+6. Whether the SG90s stay still when given no signal.

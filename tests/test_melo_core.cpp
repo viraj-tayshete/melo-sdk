@@ -1,22 +1,24 @@
 /**
  * test_melo_core.cpp
  *
- * Host evaluation and unit tests for Melo SDK core logic:
- *   - Protocol frame serialization and XOR checksum integrity
- *   - Clamping macros and percentage-to-PWM conversions
- *   - Status codes and protocol command definitions
+ * Host unit tests for the hardware-independent parts of the Melo SDK:
+ *   - clamp macro
+ *   - wheel speed -> servo pulse -> PWM duty maths
+ *   - single-sensor line following state machine
+ *
+ * Run with tests/run.sh
  */
 
 #include <iostream>
-#include <cassert>
-#include <cstring>
 #include <cstdint>
 
 #include "../src/MeloTypes.h"
-#include "../src/protocol/MeloProtocol.h"
+#include "../src/drive/WheelMath.h"
+#include "../src/behaviors/LineFollowLogic.h"
+#include "../src/ports/PortMath.h"
 
-int tests_passed = 0;
-int tests_failed = 0;
+static int tests_passed = 0;
+static int tests_failed = 0;
 
 #define TEST_ASSERT(cond, msg) \
     do { \
@@ -27,88 +29,161 @@ int tests_failed = 0;
             std::cout << "  [PASS] " << msg << std::endl; \
             tests_passed++; \
         } \
-    } while(0)
+    } while (0)
 
-void test_clamping_and_math() {
-    std::cout << "\n1. Running Clamping & Math Tests..." << std::endl;
-
-    // Test clamp within range
-    TEST_ASSERT(MELO_CLAMP(50, 0, 100) == 50, "Clamp within normal range [0, 100]");
-
-    // Test clamp below min
-    TEST_ASSERT(MELO_CLAMP(-25, 0, 100) == 0, "Clamp negative below min to 0");
-    TEST_ASSERT(MELO_CLAMP(-150, -100, 100) == -100, "Clamp speed below -100 to -100");
-
-    // Test clamp above max
-    TEST_ASSERT(MELO_CLAMP(150, 0, 100) == 100, "Clamp value above 100 to 100");
-    TEST_ASSERT(MELO_CLAMP(250, 0, 180) == 180, "Clamp servo angle above 180 to 180");
-
-    // Test PWM conversions
-    TEST_ASSERT(PCT_TO_PWM(0) == 0, "0% maps to 0 PWM");
-    TEST_ASSERT(PCT_TO_PWM(100) == 255, "100% maps to 255 PWM");
-    TEST_ASSERT(PCT_TO_PWM(50) == 127, "50% maps to 127 PWM");
-    TEST_ASSERT(PCT_TO_PWM(150) == 255, "150% is clamped to 255 PWM");
+static void test_clamp() {
+    std::cout << "\n1. Clamp macro" << std::endl;
+    TEST_ASSERT(MELO_CLAMP(50, 0, 100) == 50, "value inside range is unchanged");
+    TEST_ASSERT(MELO_CLAMP(-25, 0, 100) == 0, "value below range goes to lo");
+    TEST_ASSERT(MELO_CLAMP(250, 0, 100) == 100, "value above range goes to hi");
 }
 
-void test_protocol_framing() {
-    std::cout << "\n2. Running Protocol Contract & Checksum Tests..." << std::endl;
+static void test_wheel_pulse() {
+    std::cout << "\n2. Wheel pulse maths" << std::endl;
+    TEST_ASSERT(meloWheelPulseUs(0, false, 0) == 1500, "speed 0 is the centre pulse");
+    TEST_ASSERT(meloWheelPulseUs(100, false, 0) == 2000, "full forward, normal servo = 2000us");
+    TEST_ASSERT(meloWheelPulseUs(-100, false, 0) == 1000, "full backward, normal servo = 1000us");
+    TEST_ASSERT(meloWheelPulseUs(100, true, 0) == 1000, "full forward, mirrored servo = 1000us");
+    TEST_ASSERT(meloWheelPulseUs(-100, true, 0) == 2000, "full backward, mirrored servo = 2000us");
+    TEST_ASSERT(meloWheelPulseUs(50, false, 0) == 1750, "half speed = 1750us");
+    TEST_ASSERT(meloWheelPulseUs(0, false, 20) == 1520, "trim shifts the centre");
+    TEST_ASSERT(meloWheelPulseUs(0, true, 20) == 1520, "trim is not mirrored with the direction");
+    TEST_ASSERT(meloWheelPulseUs(100, false, 200) == MELO_SERVO_MAX_US, "pulse is clamped to the maximum");
+    TEST_ASSERT(meloWheelPulseUs(-100, false, -200) == MELO_SERVO_MIN_US, "pulse is clamped to the minimum");
+    TEST_ASSERT(meloWheelPulseUs(127, false, 0) == 2000, "speed above 100 is treated as 100");
+    TEST_ASSERT(meloWheelPulseUs(-128, false, 0) == 1000, "speed below -100 is treated as -100");
 
-    // Build frame: CMD_MOTOR_MOVE_FORWARD (speed = 80)
-    uint8_t payload[] = { 80 };
-    uint8_t buffer[64];
+    bool symmetric = true;
+    for (int s = 1; s <= 100; s++) {
+        int up   = (int)meloWheelPulseUs(s, false, 0) - 1500;
+        int down = 1500 - (int)meloWheelPulseUs(-s, false, 0);
+        if (up != down) symmetric = false;
+    }
+    TEST_ASSERT(symmetric, "forward and backward speeds are symmetric around the centre");
 
-    uint8_t frameLen = MeloProto::buildFrame(buffer, CMD_MOTOR_MOVE_FORWARD, payload, sizeof(payload));
-    TEST_ASSERT(frameLen == 6, "Frame length for 1-byte payload is 6 bytes (START + CMD + LEN + PAYLOAD + CS + END)");
-    TEST_ASSERT(buffer[0] == PROTO_FRAME_START, "Frame starts with PROTO_FRAME_START (0xAA)");
-    TEST_ASSERT(buffer[1] == (uint8_t)CMD_MOTOR_MOVE_FORWARD, "Command byte matches CMD_MOTOR_MOVE_FORWARD");
-    TEST_ASSERT(buffer[2] == 1, "Payload length is 1");
-    TEST_ASSERT(buffer[3] == 80, "Payload content is 80");
-    TEST_ASSERT(buffer[frameLen - 1] == PROTO_FRAME_END, "Frame ends with PROTO_FRAME_END (0x55)");
-
-    // Verify XOR Checksum
-    uint8_t expectedCs = buffer[1] ^ buffer[2] ^ buffer[3];
-    TEST_ASSERT(buffer[4] == expectedCs, "Checksum matches XOR computation of CMD + LEN + PAYLOAD");
-
-    // Validate checksum helper
-    uint8_t computedCs = MeloProto::checksum(&buffer[1], 3);
-    TEST_ASSERT(computedCs == buffer[4], "MeloProto::checksum correctly verifies frame checksum");
-
-    // Corrupt payload and verify checksum mismatch
-    buffer[3] ^= 0xFF; // Flip payload bits
-    uint8_t corruptedCs = MeloProto::checksum(&buffer[1], 3);
-    TEST_ASSERT(corruptedCs != buffer[4], "Checksum detects corrupted payload byte");
-
-    // Build frame: CMD_BUZZER_BEEP (freq: 1000Hz = 0x03E8, duration: 250ms = 0xFA)
-    uint8_t beepPayload[] = { 0x03, 0xE8, 0x00, 0xFA };
-    frameLen = MeloProto::buildFrame(buffer, CMD_BUZZER_BEEP, beepPayload, sizeof(beepPayload));
-    TEST_ASSERT(frameLen == 9, "Frame length for 4-byte payload is 9 bytes");
-    TEST_ASSERT(buffer[1] == (uint8_t)CMD_BUZZER_BEEP, "Command byte matches CMD_BUZZER_BEEP");
-    TEST_ASSERT(buffer[2] == 4, "Payload length is 4");
-    TEST_ASSERT(MeloProto::checksum(&buffer[1], 6) == buffer[7], "Multi-byte payload checksum verified");
+    TEST_ASSERT(meloPulseToDuty(1500) == 1228, "1500us -> duty 1228 (14-bit, 50Hz)");
+    TEST_ASSERT(meloPulseToDuty(2000) == 1638, "2000us -> duty 1638");
+    TEST_ASSERT(meloPulseToDuty(1000) == 819,  "1000us -> duty 819");
 }
 
-void test_response_codes() {
-    std::cout << "\n3. Running Response Codes & Error Definitions..." << std::endl;
+static void test_line_follow_basic() {
+    std::cout << "\n3. Line following: steering" << std::endl;
+    MeloLineFollowLogic f;
 
-    TEST_ASSERT(RESP_OK == 0x00, "RESP_OK is 0x00");
-    TEST_ASSERT(RESP_ERR_INVALID_CMD == 0x02, "RESP_ERR_INVALID_CMD is 0x02");
-    TEST_ASSERT(RESP_ERR_INVALID_ARG == 0x03, "RESP_ERR_INVALID_ARG is 0x03");
-    TEST_ASSERT(RESP_ERR_SENSOR == 0x04, "RESP_ERR_SENSOR is 0x04");
-    TEST_ASSERT(RESP_ERR_TIMEOUT == 0x06, "RESP_ERR_TIMEOUT is 0x06");
+    MeloDriveCmd on = f.step(true, 1000, 50);
+    TEST_ASSERT(on.right == 50 && on.left == 7, "on the line: arc left (left wheel slow)");
+    TEST_ASSERT(f.state() == LINE_FOLLOWING, "state is FOLLOWING on the line");
+
+    MeloDriveCmd off = f.step(false, 1010, 50);
+    TEST_ASSERT(off.left == 50 && off.right == 7, "off the line: arc right (right wheel slow)");
+    TEST_ASSERT(f.state() == LINE_FOLLOWING, "a short gap does not trigger the search");
+
+    MeloLineFollowLogic g;
+    MeloDriveCmd fast = g.step(true, 0, 250);
+    TEST_ASSERT(fast.right == 100, "speed above 100 is clamped");
+}
+
+static void test_line_follow_search() {
+    std::cout << "\n4. Line following: lost line and search" << std::endl;
+    MeloLineFollowLogic f;
+    f.step(true, 1000, 50);
+
+    f.step(false, 1000 + MELO_LINE_LOST_MS - 1, 50);
+    TEST_ASSERT(f.state() == LINE_FOLLOWING, "still FOLLOWING just before the lost timeout");
+
+    uint32_t t = 1000 + MELO_LINE_LOST_MS;
+    MeloDriveCmd c = f.step(false, t, 50);
+    TEST_ASSERT(f.state() == LINE_SEARCHING, "SEARCHING once the line has been gone for the lost timeout");
+    TEST_ASSERT(c.left == -MELO_LINE_SEARCH_SPEED_PCT && c.right == MELO_LINE_SEARCH_SPEED_PCT,
+                "first sweep pivots left on the spot");
+
+    c = f.step(false, t + MELO_LINE_SEARCH_STEP_MS, 50);
+    TEST_ASSERT(c.left == MELO_LINE_SEARCH_SPEED_PCT && c.right == -MELO_LINE_SEARCH_SPEED_PCT,
+                "second sweep pivots right");
+
+    c = f.step(false, t + MELO_LINE_SEARCH_STEP_MS + 2 * MELO_LINE_SEARCH_STEP_MS, 50);
+    TEST_ASSERT(c.left == -MELO_LINE_SEARCH_SPEED_PCT, "third sweep pivots left again, each sweep longer than the last");
+
+    c = f.step(true, t + 2000, 50);
+    TEST_ASSERT(f.state() == LINE_FOLLOWING, "finding the line returns to FOLLOWING");
+    TEST_ASSERT(c.right == 50, "and steers normally in the same step");
+
+    MeloLineFollowLogic slow;
+    slow.step(true, 0, 20);
+    slow.step(false, MELO_LINE_LOST_MS, 20);
+    MeloDriveCmd p = slow.step(false, MELO_LINE_LOST_MS + 1, 20);
+    TEST_ASSERT(p.right == 20, "search speed never exceeds the requested speed");
+}
+
+static void test_line_follow_give_up() {
+    std::cout << "\n5. Line following: giving up" << std::endl;
+    MeloLineFollowLogic f;
+    f.step(true, 0, 50);
+    uint32_t t = MELO_LINE_LOST_MS;
+    f.step(false, t, 50);
+    TEST_ASSERT(f.state() == LINE_SEARCHING, "search started");
+
+    MeloDriveCmd c = f.step(false, t + MELO_LINE_SEARCH_MAX_MS - 1, 50);
+    TEST_ASSERT(f.state() == LINE_SEARCHING, "still searching just before the limit");
+
+    c = f.step(false, t + MELO_LINE_SEARCH_MAX_MS, 50);
+    TEST_ASSERT(f.state() == LINE_GAVE_UP, "gives up after the search limit");
+    TEST_ASSERT(c.left == 0 && c.right == 0, "wheels are told to stop");
+
+    c = f.step(true, t + MELO_LINE_SEARCH_MAX_MS + 10, 50);
+    TEST_ASSERT(f.state() == LINE_GAVE_UP && c.left == 0 && c.right == 0, "stays given-up until reset");
+
+    f.reset();
+    c = f.step(true, 0, 50);
+    TEST_ASSERT(f.state() == LINE_FOLLOWING && c.right == 50, "reset() starts a fresh run");
+}
+
+static void test_line_follow_time_wrap() {
+    std::cout << "\n6. Line following: millis() wrap-around" << std::endl;
+    MeloLineFollowLogic f;
+    uint32_t start = 0xFFFFFFFFu - 500;
+    f.step(true, start, 50);
+    f.step(false, start + 100, 50);
+    TEST_ASSERT(f.state() == LINE_FOLLOWING, "no false search across the wrap point");
+    f.step(false, start + MELO_LINE_LOST_MS, 50);
+    TEST_ASSERT(f.state() == LINE_SEARCHING, "lost timeout still works across the wrap point");
+}
+
+static void test_port_ohms() {
+    std::cout << "\n7. Port ID resistor estimate" << std::endl;
+    TEST_ASSERT(meloPortOhms(MELO_ADC_MAX) == -1, "full-scale reading = nothing plugged in");
+    TEST_ASSERT(meloPortOhms(MELO_PORT_OPEN_RAW) == -1, "reading at the open threshold = nothing plugged in");
+    TEST_ASSERT(meloPortOhms(0) == 0, "0 reading = shorted to ground");
+    // 10k pull-up with a 10k block: the midpoint, raw 2048 -> about 10k
+    int32_t mid = meloPortOhms(2048);
+    TEST_ASSERT(mid >= 9900 && mid <= 10100, "midpoint reading estimates the pull-up value");
+    // 4k7 block: raw = 4095 * 4700 / 14700 = 1309
+    int32_t r47 = meloPortOhms(1309);
+    TEST_ASSERT(r47 >= 4600 && r47 <= 4800, "a 4k7 block is estimated close to 4.7k");
+    // 33k block: raw = 4095 * 33000 / 43000 = 3142
+    int32_t r33 = meloPortOhms(3142);
+    TEST_ASSERT(r33 >= 32000 && r33 <= 34000, "a 33k block is estimated close to 33k");
+    bool monotonic = true;
+    for (int raw = 1; raw < MELO_PORT_OPEN_RAW; raw++)
+        if (meloPortOhms((uint16_t)raw) < meloPortOhms((uint16_t)(raw - 1))) monotonic = false;
+    TEST_ASSERT(monotonic, "estimated resistance never falls as the reading rises");
 }
 
 int main() {
     std::cout << "========================================" << std::endl;
-    std::cout << "   Melo SDK Core Evaluation Test Suite   " << std::endl;
+    std::cout << "   Melo SDK Host Test Suite             " << std::endl;
     std::cout << "========================================" << std::endl;
 
-    test_clamping_and_math();
-    test_protocol_framing();
-    test_response_codes();
+    test_clamp();
+    test_wheel_pulse();
+    test_line_follow_basic();
+    test_line_follow_search();
+    test_line_follow_give_up();
+    test_line_follow_time_wrap();
+    test_port_ohms();
 
     std::cout << "\n========================================" << std::endl;
-    std::cout << "Test Results: " << tests_passed << " Passed, " << tests_failed << " Failed" << std::endl;
+    std::cout << "Results: " << tests_passed << " passed, " << tests_failed << " failed" << std::endl;
     std::cout << "========================================" << std::endl;
-
-    return (tests_failed == 0) ? 0 : 1;
+    return tests_failed == 0 ? 0 : 1;
 }
