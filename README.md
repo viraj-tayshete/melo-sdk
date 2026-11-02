@@ -1,274 +1,96 @@
 # Melo SDK
 
-> **Make Melo hardware feel like a programmable robot, not an ESP development board.**
+> Make Melo hardware feel like a programmable robot, not an ESP development board.
 
-The Melo SDK is the Arduino library for the Melo robotics kit. It gives you a clean, robot-level API so you can focus on robot behavior — not GPIO, PWM, I²C, or low-level drivers.
+The Melo SDK is the Arduino library behind the Melo robot kit. It is also the library that **Melo Blocks** generates code against: a child arranges blocks, Blocks writes a few lines of Arduino code, and this library does the rest.
 
----
-
-## What you can do
-
-```cpp
-#include <Melo.h>
-
-void setup() {
-    Melo.begin();                  // Initialize everything
-}
-
-void loop() {
-    Melo.moveForward(70);          // Drive forward at 70% speed
-    delay(2000);
-
-    Melo.stop();                   // Stop
-    delay(500);
-
-    if (Melo.obstacleDetected(20)) {
-        Melo.beep(1000, 200);      // Alert beep
-        Melo.turnLeft();           // Avoid obstacle
-        delay(400);
-    }
-}
-```
-
-No `analogWrite()`. No `ledcSetup()`. No pulse timing. Just `Melo.moveForward(70)`.
-
----
-
-## Installation
-
-### Option A — Arduino Library Manager (recommended)
-
-1. Open Arduino IDE
-2. Go to **Sketch → Include Library → Manage Libraries...**
-3. Search for **"Melo"**
-4. Click **Install**
-
-### Option B — Manual installation
-
-1. Download this repository as a ZIP file
-2. In Arduino IDE: **Sketch → Include Library → Add .ZIP Library...**
-3. Select the downloaded ZIP file
-
-### Option C — Developer install
-
-```bash
-git clone https://github.com/viraj-tayshete/melo-sdk.git
-```
-Move the `MeloSDK` folder into your Arduino `libraries/` directory.
-
----
-
-## Hardware Setup
-
-1. Connect your Melo kit via USB to your computer
-2. In Arduino IDE: **Tools → Board → ESP32 Arduino → ESP32 Dev Module**
-   *(or the appropriate Melo board variant when available)*
-3. **Tools → Port → [select your COM/tty port]**
-4. Open **Serial Monitor** at **115200 baud**
-
-> **Pin Configuration:** All hardware pin assignments are defined in `src/MeloConfig.h`.  
-> Default values are placeholders — verify against the physical Melo PCB schematic before use.
-
----
-
-## Quick Start Examples
-
-### 1. Basic Setup
 ```cpp
 #include <Melo.h>
 
 void setup() {
     Melo.begin();
-    Melo.printStatus();  // Print device info to Serial Monitor
-}
-
-void loop() {}
-```
-
-### 2. Drive forward and stop
-```cpp
-#include <Melo.h>
-
-void setup() {
-    Melo.begin();
-}
-
-void loop() {
     Melo.moveForward(70);
     delay(2000);
     Melo.stop();
-    delay(1000);
 }
-```
-
-### 3. Obstacle avoidance
-```cpp
-#include <Melo.h>
-
-void setup() { Melo.begin(); }
 
 void loop() {
-    if (Melo.obstacleDetected(20.0)) {
-        Melo.stop();
-        Melo.beep(1200, 150);
-        Melo.moveBackward(50);
-        delay(500);
-        Melo.turnRight(55);
-        delay(500);
-    } else {
-        Melo.moveForward(60);
-    }
-    delay(50);
 }
 ```
 
----
+## Status
 
-## API Overview
+**Version 0.2.0, work in progress. It has not been run on a real robot yet.**
 
-### System
-| Method | Description |
-|--------|-------------|
-| `Melo.begin()` | Initialize robot — call first in `setup()` |
-| `Melo.isReady()` | Check if initialized |
-| `Melo.printStatus()` | Print device info to Serial |
-| `Melo.lastErrorMessage()` | Get human-readable last error |
+- It compiles for the Arduino Nano ESP32 (ESP32 core 3.3.3); the host tests pass.
+- The board has six identical ports (see [the hardware inventory](docs/HARDWARE_CAPABILITY_INVENTORY.md)). Every pin in [src/MeloConfig.h](src/MeloConfig.h), and which part sits in which port, is a **placeholder** until it is checked against the PCB.
+- The IR sensor type, the light sensor circuit and the servo wiring are **unconfirmed**.
+- It is not yet in the Arduino Library Manager. Install it from a ZIP (below).
 
-### Movement
-| Method | Description |
-|--------|-------------|
-| `Melo.moveForward(speed)` | Drive forward (0–100%) |
-| `Melo.moveBackward(speed)` | Drive backward (0–100%) |
-| `Melo.turnLeft(speed)` | Turn left (0–100%) |
-| `Melo.turnRight(speed)` | Turn right (0–100%) |
-| `Melo.stop()` | Active brake all motors |
-| `Melo.coast()` | Passive stop |
-| `Melo.motor(id, speed)` | Set individual motor (-100 to 100%) |
+## The kit
 
-### Sensors
-| Method | Description |
-|--------|-------------|
-| `Melo.readDistance()` | Distance in cm (HC-SR04) |
-| `Melo.obstacleDetected(cm)` | True if obstacle within threshold |
-| `Melo.readLine()` | Line detected (true/false) |
-| `Melo.readLight()` | Light level (0–4095) |
+| Part | Library support |
+|------|-----------------|
+| Arduino Nano ESP32 | The only supported board |
+| 2 x continuous-rotation (360°) SG90 servos, one per wheel | `moveForward`, `moveBackward`, `turnLeft`, `turnRight`, `stop`, `wheel`, `followLine` |
+| 1 IR sensor | `irDetected`, `lineDetected`, `obstacleDetected` |
+| Light sensor | `readLight` |
+| White LED | `led`, `ledBlink` |
+| Buzzer | `beep`, `startBeep`, `stopBeep` |
 
-### Actuators
-| Method | Description |
-|--------|-------------|
-| `Melo.servo(id, angle)` | Set servo angle (0–180°) |
-| `Melo.servoCenter(id)` | Move servo to 90° |
-| `Melo.led(id, on)` | Set LED on/off |
-| `Melo.ledBlink(id, times, onMs)` | Blink LED |
-| `Melo.beep(hz, ms)` | Play tone (blocking) |
-| `Melo.startBeep(hz)` | Start continuous tone |
-| `Melo.stopBeep()` | Stop tone |
+There is no distance sensor, button, IMU or battery sensing, so the library has no functions for them.
 
----
+## Installation
+
+1. Download this repository as a ZIP.
+2. In the Arduino IDE: **Sketch → Include Library → Add .ZIP Library...**
+3. In **Boards Manager** install **esp32 by Espressif Systems** (version 3.x), then choose **Tools → Board → esp32 → Arduino Nano ESP32**. The separate *Arduino ESP32 Boards* package is based on core 2.x and is **not supported yet** (the library stops with an error message).
+4. Open an example from **File → Examples → Melo** and upload it.
+
+If a wheel spins the wrong way, flip `MELO_RIGHT_WHEEL_INVERTED` (or the left one) in `src/MeloConfig.h`.
+
+## Safety notes
+
+- Run the wheel servos from a power source that can supply their current (not the board's 3.3 V pin), with a common ground. A starting servo can reset the board.
+- The Nano ESP32 pins are 3.3 V only and are not 5 V tolerant. Check the voltage of the sensors' outputs.
+- Try the first drive example with the wheels off the ground.
+
+## API at a glance
+
+| Group | Functions |
+|-------|-----------|
+| System | `begin`, `isReady`, `printStatus`, `lastErrorMessage` |
+| Ports | `portRaw`, `portOhms` |
+| Driving | `moveForward`, `moveBackward`, `turnLeft`, `turnRight`, `stop`, `wheel`, `trimWheel` |
+| Line following | `followLine`, `resetLineFollow` |
+| IR sensor | `irDetected`, `lineDetected`, `obstacleDetected`, `irRaw` |
+| Light | `readLight`, `readLightRaw` |
+| LED | `led`, `ledBlink` |
+| Buzzer | `beep`, `startBeep`, `stopBeep` |
+| Program | `halt` |
+
+Full details: [docs/API_REFERENCE.md](docs/API_REFERENCE.md).
 
 ## Examples
 
-| Example | Demonstrates |
-|---------|-------------|
-| `01_BasicSetup` | Initialization and device info |
-| `02_MoveForward` | Driving forward and stopping |
-| `04_Turn` | Left and right turns |
-| `06_Servo` | Servo angle control |
-| `07_DistanceSensor` | Distance reading and obstacle detection |
-| `09_LED` | LED on/off and blink |
-| `10_Buzzer` | Tone playback |
-| `11_ObstacleAvoidance` | Full autonomous behavior |
+`01_BasicSetup`, `02_Drive`, `03_Turn`, `04_IRSensor`, `05_LineFollow`, `06_ObstacleAvoidance`, `07_LightSensor`, `08_LED`, `09_Buzzer`, `10_PortScan` (measure the ID resistor of each block).
 
-Open examples from **File → Examples → Melo** in Arduino IDE.
+## For Melo Blocks
 
----
+[docs/CAPABILITY_MODEL.json](docs/CAPABILITY_MODEL.json) lists every block (label, inputs, ranges, defaults, and the Arduino code each one generates). It is the single source of truth: the SDK and Blocks must expose the same capabilities.
 
-## Project Structure
+## Development
 
-```
-MeloSDK/
-├── src/
-│   ├── Melo.h               ← Public API (include this)
-│   ├── Melo.cpp             ← API implementation
-│   ├── MeloConfig.h         ← Pin assignments and constants
-│   ├── MeloTypes.h          ← Types, enums, structs
-│   ├── motors/              ← Motor driver
-│   ├── sensors/             ← Distance and line sensors
-│   ├── servos/              ← Servo driver
-│   ├── leds/                ← LED driver
-│   ├── buzzer/              ← Buzzer driver
-│   └── protocol/            ← SDK ↔ firmware protocol contract
-├── examples/                ← Arduino example sketches
-├── docs/
-│   ├── ARCHITECTURE.md      ← System architecture
-│   ├── API_REFERENCE.md     ← Full API documentation
-│   ├── HARDWARE_CAPABILITY_INVENTORY.md
-│   └── CAPABILITY_MODEL.json ← Shared capability model for Melo Blocks
-├── library.properties
-├── keywords.txt
-└── README.md
+```sh
+tests/run.sh                                     # host unit tests (any C++17 compiler)
+python3 tools/check_capabilities.py              # capability model vs. the C++ API
+python3 tools/generate_test_sketch.py out/Gen    # generate a sketch from every block
 ```
 
----
+CI ([.github/workflows/ci.yml](.github/workflows/ci.yml)) runs these and compiles every example and the generated sketch for the Nano ESP32. To add a capability, add the method to `src/Melo.h`, add an entry to `docs/CAPABILITY_MODEL.json`, and add the name to `keywords.txt`; the checker fails if they disagree.
 
-## Architecture
-
-```
-User Code / Melo Blocks
-        ↓
-   Melo SDK / API           ← This library
-        ↓
- Communication Protocol
-        ↓
-    ESP Firmware
-        ↓
- Motors / Sensors / LEDs / Buzzer
-```
-
-See [ARCHITECTURE.md](docs/ARCHITECTURE.md) for full details.
-
----
-
-## Compatibility
-
-| Board | Status |
-|-------|--------|
-| ESP32 Dev Module | ✅ Primary target |
-| ESP8266 | ✅ Compatible (with analogWrite / tone fallback) |
-| Melo Kit v1 | ✅ Designed for |
-
-**Dependencies:** Arduino `Servo` library (built into Arduino IDE)
-
----
-
-## Important Note on Pin Configuration
-
-> All default pin assignments in `src/MeloConfig.h` are **placeholders**.  
-> They must be verified against the physical Melo PCB schematic before flashing.
->
-> See `docs/HARDWARE_CAPABILITY_INVENTORY.md` for the full list of confirmed vs assumed hardware.
-
----
-
-## Version
-
-| Version | Description |
-|---------|-------------|
-| 0.1.0 | Initial release — full API, all subsystems, examples, docs |
-
-See [ARCHITECTURE.md](docs/ARCHITECTURE.md) for protocol versioning details.
-
----
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/HARDWARE_CAPABILITY_INVENTORY.md](docs/HARDWARE_CAPABILITY_INVENTORY.md).
 
 ## License
 
-MIT License — see LICENSE file.
-
----
-
-## Contributing
-
-1. Read [ARCHITECTURE.md](docs/ARCHITECTURE.md) first
-2. Check [HARDWARE_CAPABILITY_INVENTORY.md](docs/HARDWARE_CAPABILITY_INVENTORY.md) for open assumptions
-3. All new capabilities must be added to [CAPABILITY_MODEL.json](docs/CAPABILITY_MODEL.json)
-4. Public API changes require corresponding updates to [API_REFERENCE.md](docs/API_REFERENCE.md)
+MIT, see [LICENSE](LICENSE).

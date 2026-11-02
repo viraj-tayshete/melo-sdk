@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  host:
+    name: Host tests and capability check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Unit tests
+        run: tests/run.sh
+      - name: Capability model matches the C++ API
+        run: python3 tools/check_capabilities.py
+      - name: Generate a sketch from every block
+        run: python3 tools/generate_test_sketch.py generated/GeneratedBlocks
+      - uses: actions/upload-artifact@v4
+        with:
+          name: generated-sketch
+          path: generated/GeneratedBlocks
+
+  compile:
+    name: Compile for Arduino Nano ESP32
+    needs: host
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Generate a sketch from every block
+        run: python3 tools/generate_test_sketch.py generated/GeneratedBlocks
+      - uses: arduino/compile-sketches@v1
+        with:
+          fqbn: esp32:esp32:nano_nora
+          platforms: |
+            - name: esp32:esp32
+              version: 3.3.3
+              source-url: https://espressif.github.io/arduino-esp32/package_esp32_index.json
+          libraries: |
+            - source-path: ./
+          sketch-paths: |
+            - examples
+            - tests/compile/PinSelection
+            - generated/GeneratedBlocks
+          enable-warnings-report: true
+          cli-compile-flags: |
+            - --warnings=all
