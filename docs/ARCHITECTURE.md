@@ -13,7 +13,7 @@ Melo Blocks (browser)
 Arduino sketch  ──includes──►  Melo SDK (this library)
       │  compile (server) and upload
       ▼
-Arduino Nano ESP32  ──►  wheels (2 servos), IR, light sensor, LED, buzzer
+Melo Mini (ESP32-S3-WROOM)  ──►  wheels (2 servos), IR, light sensor, LED, buzzer
 ```
 
 **Execution model:** the generated sketch, with this library, *is* the program running on the robot. There is no separate firmware and no live link to the browser, so the earlier serial protocol (`MeloProtocol.h`) was removed.
@@ -37,7 +37,7 @@ Keeping the logic pure means the maths (speed to servo pulse, the line-following
 
 | Decision | Reason |
 |----------|--------|
-| Target the ESP32 core 3.x only (Espressif's `esp32` package) | Pin-based LEDC API; the only version tested. Arduino's own `arduino:esp32` package is core 2.0.18, so the library refuses to build there with a clear message. The old 2.x code paths were untested and removed. The Blocks compile server pins its own core, so kids are unaffected. |
+| Target the ESP32-S3 (Melo Mini) on core 3.x only (Espressif's `esp32` package) | Pin-based LEDC API; the only version tested. Arduino's own `arduino:esp32` package is core 2.0.18, so the library refuses to build there with a clear message. The old 2.x code paths were untested and removed. The Blocks compile server pins its own core, so kids are unaffected. |
 | Wheels are continuous-rotation servos driven by LEDC at 50 Hz, 14-bit | The kit has no motor driver. Speed is the pulse width (1500 µs = stop). |
 | `stop()` removes the pulse | A continuous servo with no signal rests; configurable if a servo drifts. |
 | One IR sensor, three functions | The sensor is multi-use; the user picks the meaning by the block they use. |
@@ -48,7 +48,7 @@ Keeping the logic pure means the maths (speed to servo pulse, the line-following
 
 ## Open items
 
-- The board has six ports with an Add (ID) line each. The SDK models them as a pin table and a part-to-port list, but the pad-to-Nano mapping, the block ID scheme, servo power and the IR/light circuits are unconfirmed (see HARDWARE_CAPABILITY_INVENTORY.md). Auto-detecting blocks is not built.
+- The board has six ports with an Add (ID) line each. The SDK models them as a pin table and a part-to-port list, but the routing of the ports to ESP32-S3 GPIOs, the block ID scheme, servo power and the IR/light circuits are unconfirmed (see HARDWARE_CAPABILITY_INVENTORY.md). Auto-detecting blocks is not built.
 - Nothing has run on a real robot: wheel direction, stop behaviour, and the line-following timings are all untested.
-- The Nano ESP32 uploads over USB DFU. Uploading from a browser is unproven and is the main risk for the Blocks pipeline.
+- Uploading from a browser is unproven. The ESP32-S3 can be flashed over its native USB with the same protocol esptool-js speaks, so this should work in Chrome/Edge, but it depends on how the Melo Mini wires USB and its boot/reset lines.
 - A runtime pin configuration (so kits with different wiring need no library edit) is not built.

@@ -16,6 +16,7 @@
 #include "../src/drive/WheelMath.h"
 #include "../src/behaviors/LineFollowLogic.h"
 #include "../src/ports/PortMath.h"
+#include "../src/PinRules.h"
 
 static int tests_passed = 0;
 static int tests_failed = 0;
@@ -169,6 +170,28 @@ static void test_port_ohms() {
     TEST_ASSERT(monotonic, "estimated resistance never falls as the reading rises");
 }
 
+static void test_pin_rules() {
+    std::cout << "\n8. ESP32-S3-WROOM pin rules" << std::endl;
+    int good[] = {1, 2, 4, 5, 10, 18, 21, 38, 42, 47, 48};
+    bool allGood = true;
+    for (int p : good) if (!meloGpioUsable(p)) allGood = false;
+    TEST_ASSERT(allGood, "ordinary GPIOs (1,2,4..18,21,38..42,47,48) are usable");
+    TEST_ASSERT(!meloGpioUsable(0) && !meloGpioUsable(3) && !meloGpioUsable(45) && !meloGpioUsable(46), "strapping pins are rejected");
+    TEST_ASSERT(!meloGpioUsable(19) && !meloGpioUsable(20), "USB pins are rejected");
+    TEST_ASSERT(!meloGpioUsable(22) && !meloGpioUsable(25), "GPIO22-25 (nonexistent) are rejected");
+    TEST_ASSERT(!meloGpioUsable(26) && !meloGpioUsable(37), "flash/PSRAM pins 26-37 are rejected");
+    TEST_ASSERT(!meloGpioUsable(43) && !meloGpioUsable(44), "UART0 pins are rejected");
+    TEST_ASSERT(!meloGpioUsable(-1) && !meloGpioUsable(49), "out-of-range pins are rejected");
+    bool defaultsOk = true;
+    int defaults[] = {MELO_DEFAULT_PORT1_SIGNAL_PIN, MELO_DEFAULT_PORT2_SIGNAL_PIN, MELO_DEFAULT_PORT3_SIGNAL_PIN,
+                      MELO_DEFAULT_PORT4_SIGNAL_PIN, MELO_DEFAULT_PORT5_SIGNAL_PIN, MELO_DEFAULT_PORT6_SIGNAL_PIN,
+                      MELO_DEFAULT_PORT1_ADD_PIN, MELO_DEFAULT_PORT2_ADD_PIN, MELO_DEFAULT_PORT3_ADD_PIN,
+                      MELO_DEFAULT_PORT4_ADD_PIN, MELO_DEFAULT_PORT5_ADD_PIN, MELO_DEFAULT_PORT6_ADD_PIN,
+                      MELO_DEFAULT_LEFT_WHEEL_PIN, MELO_DEFAULT_RIGHT_WHEEL_PIN};
+    for (int p : defaults) if (!meloGpioUsable(p)) defaultsOk = false;
+    TEST_ASSERT(defaultsOk, "every default pin passes the rules");
+}
+
 int main() {
     std::cout << "========================================" << std::endl;
     std::cout << "   Melo SDK Host Test Suite             " << std::endl;
@@ -181,6 +204,7 @@ int main() {
     test_line_follow_give_up();
     test_line_follow_time_wrap();
     test_port_ohms();
+    test_pin_rules();
 
     std::cout << "\n========================================" << std::endl;
     std::cout << "Results: " << tests_passed << " passed, " << tests_failed << " failed" << std::endl;

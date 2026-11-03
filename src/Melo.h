@@ -15,7 +15,7 @@
  *       delay(1000);
  *   }
  *
- * Hardware: Arduino Nano ESP32, two continuous-rotation servo wheels, one IR
+ * Hardware: Melo Mini (ESP32-S3-WROOM), two continuous-rotation servo wheels, one IR
  * sensor, a light sensor, one LED and a buzzer.
  *
  * Every public method that is a robot capability must be listed in

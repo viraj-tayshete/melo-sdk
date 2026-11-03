@@ -2,14 +2,18 @@
 
 Last updated 2026-11-02. **CONFIRMED** = stated by the project owner. **ASSUMED** = my working assumption. **UNKNOWN** = needs checking on the hardware.
 
-## Controller
+## Controller and power
 
 | Item | Value | Status |
 |------|-------|--------|
-| Board | Arduino Nano ESP32 (ESP32-S3), `esp32:esp32:nano_nora` | CONFIRMED |
+| Board | **Melo Mini**, the team's own PCB | CONFIRMED |
+| MCU module | ESP32-S3-WROOM (exact variant, e.g. N8 / N16R8, not recorded) | CONFIRMED / variant UNKNOWN |
+| Arduino board setting | `ESP32S3 Dev Module` (`esp32:esp32:esp32s3`) | CHOSEN |
 | Core | Espressif `esp32` package 3.x (built with 3.3.3); Arduino's `arduino:esp32` is core 2.x and unsupported | CHOSEN |
-| Logic level | 3.3 V, pins not 5 V tolerant | from third-party guides, verify |
-| Upload | USB DFU | from the core's board definition |
+| Logic level | 3.3 V; GPIOs are not 5 V tolerant | datasheet, verify |
+| Battery | 9 V | CONFIRMED |
+| Power path | Power switch and step-down converters to 5 V / 3.3 V as needed; 9 V is never connected directly | CONFIRMED (design not seen) |
+| USB / upload | How USB, EN and BOOT (GPIO0) are wired on the Melo Mini | UNKNOWN |
 
 ## Parts
 
@@ -54,24 +58,29 @@ Port to pad: J1 = Signal J13 / Add J7, J2 = J14 / J8, J3 = J15 / J9, J4 = J16 / 
 - What supplies J20's +5 V (the Nano ESP32 has no ordinary 5 V output pin).
 - AMS1117 output-capacitor requirements versus the 22 uF ceramic: check the datasheet.
 
-## Pin map (PLACEHOLDERS: the pad-to-controller mapping is unknown)
+## Pin map (PLACEHOLDERS: the Melo Mini routing is not recorded here yet)
 
-| Signal | Nano ESP32 pin | Part (placeholder assignment) |
-|--------|----------------|-------------------------------|
-| Port 1 Signal / Add | D2 / A0 | IR sensor |
-| Port 2 Signal / Add | D3 / A1 | Light sensor |
-| Port 3 Signal / Add | D4 / A2 | LED |
-| Port 4 Signal / Add | D5 / A3 | Buzzer |
-| Port 5 Signal / Add | D6 / A4 | free |
-| Port 6 Signal / Add | D7 / A5 | free |
-| Left wheel servo | D8 | own pin (not known to use a port) |
-| Right wheel servo | D9 | own pin (not known to use a port) |
+GPIO numbers on the ESP32-S3-WROOM. `src/PinRules.h` rejects pins the module cannot use (strapping 0/3/45/46, USB 19/20, flash/PSRAM 26-37, UART0 43/44, nonexistent 22-25).
+
+| Signal | GPIO | Part (placeholder assignment) |
+|--------|------|-------------------------------|
+| Port 1 Signal / Add | 8 / 1 | IR sensor |
+| Port 2 Signal / Add | 9 / 2 | Light sensor |
+| Port 3 Signal / Add | 10 / 4 | LED |
+| Port 4 Signal / Add | 11 / 5 | Buzzer |
+| Port 5 Signal / Add | 12 / 6 | free |
+| Port 6 Signal / Add | 13 / 7 | free |
+| Left wheel servo | 14 | own pin (not known to use a port) |
+| Right wheel servo | 15 | own pin (not known to use a port) |
+
+Add lines are read as analog and sit on ADC1 pins (GPIO1-10).
 
 ## To find out
 
-1. Which controller pin each pad J7-J18 reaches, and the source of J20's +5 V.
-2. How the wheel servos are powered and connected (ports or separate connectors).
-3. The ID scheme: resistor value of each block. `examples/10_PortScan` measures them on the real board once the pins are right.
-4. Which block goes in which port.
-5. IR module type and output polarity, and the light sensor circuit.
-6. Whether the SG90s stay still when given no signal.
+1. The real GPIO each pad J7-J18 reaches on the Melo Mini, and the net feeding J20 (labelled +5V on the schematic; with a 9 V battery check what it really carries).
+2. Step-down design: the 5 V rail for the servos, its current rating, and whether the power switch is before it.
+3. The AMS1117-3.3 on the main board: at 9 V in it dissipates about 0.57 W per 100 mA, so check its input source and heat. Also its output-capacitor requirements versus the 22 uF ceramic.
+4. The ID scheme: resistor value of each block (`examples/10_PortScan` measures them).
+5. Which block goes in which port; IR module type and polarity; light sensor circuit.
+6. USB wiring and boot/reset circuit (needed for uploading from a browser).
+7. Whether the SG90s stay still when given no signal.

@@ -1,6 +1,6 @@
 # Melo SDK - API Reference
 
-**SDK version:** 0.2.0  **Board:** Arduino Nano ESP32 (ESP32 core 3.x)
+**SDK version:** 0.2.0  **Board:** Melo Mini, ESP32-S3-WROOM (ESP32 core 3.x)
 
 Speeds are percentages of full wheel speed. Calling any function before `Melo.begin()` does nothing, prints a message to Serial and sets `lastError()` to `MELO_ERR_NOT_INIT`.
 

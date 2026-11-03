@@ -7,6 +7,7 @@
  */
 
 #include "Melo.h"
+#include "PinRules.h"
 
 // Two parts sharing a pin would silently fight each other.
 static constexpr bool meloPinsDistinct(const int* pins, int n) {
@@ -24,6 +25,17 @@ static constexpr int kMeloPins[] = {
 };
 static_assert(meloPinsDistinct(kMeloPins, sizeof(kMeloPins) / sizeof(kMeloPins[0])),
               "Melo: two wheel or port pins in MeloConfig.h are the same pin");
+
+// Every pin must be a GPIO the ESP32-S3-WROOM can safely use (see PinRules.h).
+#ifndef MELO_ALLOW_RESERVED_PINS
+static constexpr bool meloPinsUsable(const int* pins, int n) {
+    for (int i = 0; i < n; i++)
+        if (!meloGpioUsable(pins[i])) return false;
+    return true;
+}
+static_assert(meloPinsUsable(kMeloPins, sizeof(kMeloPins) / sizeof(kMeloPins[0])),
+              "Melo: a pin in MeloConfig.h is reserved or missing on the ESP32-S3-WROOM (flash, USB, strapping, console). See PinRules.h.");
+#endif
 
 // Each part must sit on its own port.
 static_assert(MELO_IR_PORT >= 1 && MELO_IR_PORT <= MELO_PORT_COUNT &&

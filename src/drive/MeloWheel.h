@@ -15,7 +15,7 @@
 #include "WheelMath.h"
 
 #if !defined(ESP32)
-  #error "Melo needs an ESP32 board (Arduino Nano ESP32). Choose it in Tools > Board."
+  #error "Melo needs an ESP32-S3 board. Choose Tools > Board > esp32 > ESP32S3 Dev Module."
 #else
   #include <esp_arduino_version.h>
   #if ESP_ARDUINO_VERSION_MAJOR < 3

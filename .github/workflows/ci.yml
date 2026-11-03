@@ -22,7 +22,7 @@ jobs:
           path: generated/GeneratedBlocks
 
   compile:
-    name: Compile for Arduino Nano ESP32
+    name: Compile for ESP32-S3 (Melo Mini)
     needs: host
     runs-on: ubuntu-latest
     steps:
@@ -31,7 +31,7 @@ jobs:
         run: python3 tools/generate_test_sketch.py generated/GeneratedBlocks
       - uses: arduino/compile-sketches@v1
         with:
-          fqbn: esp32:esp32:nano_nora
+          fqbn: esp32:esp32:esp32s3
           platforms: |
             - name: esp32:esp32
               version: 3.3.3

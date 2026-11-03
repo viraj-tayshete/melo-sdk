@@ -1,16 +1,17 @@
 /**
  * MeloConfig.h
  *
- * Central pin and hardware configuration for the Melo robot.
+ * Central pin and hardware configuration for the Melo Mini robot board.
  *
- * Target: Arduino Nano ESP32 (esp32:esp32:nano_nora), ESP32 Arduino core 3.x.
+ * Target: ESP32-S3-WROOM on the Melo Mini PCB (Tools > Board > esp32 >
+ * ESP32S3 Dev Module), ESP32 Arduino core 3.x. Pins are GPIO numbers.
  *
  * IMPORTANT: every pin below is a PLACEHOLDER until it is checked against the
- * real Melo PCB. Pins use Arduino numbering on the Nano ESP32 (D2, A0, ...).
+ * real Melo Mini PCB. See PinRules.h for the pins the module cannot use.
  *
  * To change a pin, edit the MELO_DEFAULT_* lines below. (A #define in a sketch
  * does NOT work: the library is compiled separately from the sketch. Passing
- * -DMELO_PORT3_SIGNAL_PIN=D7 as a compiler flag for the whole build does work.)
+ * -DMELO_PORT3_SIGNAL_PIN=40 as a compiler flag for the whole build does work.)
  *
  * SDK Version: 0.2.0
  */
@@ -32,40 +33,28 @@
 // Add pin tells which block is plugged in (this is an inference; the ID scheme
 // is not defined yet). Portn below means port Jn.
 //
-// !! PLACEHOLDERS !! Which controller pin each pad reaches is NOT KNOWN yet.
+// !! PLACEHOLDERS !! The real Melo Mini routing is not recorded here yet.
 // ---------------------------------------------------------------------------
-#if defined(ARDUINO_NANO_ESP32)
-  #define MELO_DEFAULT_PORT1_SIGNAL_PIN  D2
-  #define MELO_DEFAULT_PORT2_SIGNAL_PIN  D3
-  #define MELO_DEFAULT_PORT3_SIGNAL_PIN  D4
-  #define MELO_DEFAULT_PORT4_SIGNAL_PIN  D5
-  #define MELO_DEFAULT_PORT5_SIGNAL_PIN  D6
-  #define MELO_DEFAULT_PORT6_SIGNAL_PIN  D7
-  #define MELO_DEFAULT_PORT1_ADD_PIN     A0
-  #define MELO_DEFAULT_PORT2_ADD_PIN     A1
-  #define MELO_DEFAULT_PORT3_ADD_PIN     A2
-  #define MELO_DEFAULT_PORT4_ADD_PIN     A3
-  #define MELO_DEFAULT_PORT5_ADD_PIN     A4
-  #define MELO_DEFAULT_PORT6_ADD_PIN     A5
-  #define MELO_DEFAULT_LEFT_WHEEL_PIN    D8
-  #define MELO_DEFAULT_RIGHT_WHEEL_PIN   D9
-#else
-  // Generic ESP32 dev boards (GPIO numbers). Only for developers; the kit uses the Nano ESP32.
-  #define MELO_DEFAULT_PORT1_SIGNAL_PIN  4
-  #define MELO_DEFAULT_PORT2_SIGNAL_PIN  5
-  #define MELO_DEFAULT_PORT3_SIGNAL_PIN  18
-  #define MELO_DEFAULT_PORT4_SIGNAL_PIN  19
-  #define MELO_DEFAULT_PORT5_SIGNAL_PIN  21
-  #define MELO_DEFAULT_PORT6_SIGNAL_PIN  22
-  #define MELO_DEFAULT_PORT1_ADD_PIN     32
-  #define MELO_DEFAULT_PORT2_ADD_PIN     33
-  #define MELO_DEFAULT_PORT3_ADD_PIN     34
-  #define MELO_DEFAULT_PORT4_ADD_PIN     35
-  #define MELO_DEFAULT_PORT5_ADD_PIN     36
-  #define MELO_DEFAULT_PORT6_ADD_PIN     39
-  #define MELO_DEFAULT_LEFT_WHEEL_PIN    16
-  #define MELO_DEFAULT_RIGHT_WHEEL_PIN   17
+#if defined(ARDUINO) && !defined(CONFIG_IDF_TARGET_ESP32S3)
+  #error "Melo targets the ESP32-S3 (Melo Mini). Choose Tools > Board > esp32 > ESP32S3 Dev Module."
 #endif
+
+// GPIO numbers on the ESP32-S3-WROOM. The Add lines are read as analog, so
+// they sit on ADC1 pins (GPIO1-10), which also work together with Wi-Fi.
+#define MELO_DEFAULT_PORT1_SIGNAL_PIN  8
+#define MELO_DEFAULT_PORT2_SIGNAL_PIN  9
+#define MELO_DEFAULT_PORT3_SIGNAL_PIN  10
+#define MELO_DEFAULT_PORT4_SIGNAL_PIN  11
+#define MELO_DEFAULT_PORT5_SIGNAL_PIN  12
+#define MELO_DEFAULT_PORT6_SIGNAL_PIN  13
+#define MELO_DEFAULT_PORT1_ADD_PIN     1
+#define MELO_DEFAULT_PORT2_ADD_PIN     2
+#define MELO_DEFAULT_PORT3_ADD_PIN     4
+#define MELO_DEFAULT_PORT4_ADD_PIN     5
+#define MELO_DEFAULT_PORT5_ADD_PIN     6
+#define MELO_DEFAULT_PORT6_ADD_PIN     7
+#define MELO_DEFAULT_LEFT_WHEEL_PIN    14
+#define MELO_DEFAULT_RIGHT_WHEEL_PIN   15
 
 #ifndef MELO_PORT1_SIGNAL_PIN
   #define MELO_PORT1_SIGNAL_PIN  MELO_DEFAULT_PORT1_SIGNAL_PIN
